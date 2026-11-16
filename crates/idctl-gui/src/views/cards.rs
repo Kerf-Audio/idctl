@@ -13,6 +13,7 @@ use crate::channel_dsp::{ChannelDsp, DspEdit, DSP_CHANNELS};
 use crate::mix::{NODES, OFF_DB, REVERB_MIX};
 use crate::model::{channel, Model};
 use crate::theme::{self, caption, palette as p, BOLD};
+use crate::widgets::knob::Style;
 use crate::widgets::{CompGraph, EqGraph, Knob, ReverbGraph, Taper};
 use crate::{App, Editor, Message};
 
@@ -313,57 +314,74 @@ fn send_card(m: &Model, node: usize) -> Element<'_, Message> {
     card("Reverb", Some((on, Message::SendOn(node))), None, body)
 }
 
-/// Reverb return controls across the width of the last pair. The power
-/// switch mutes the return in `mix`; the device has no reverb on/off.
+/// Reverb return controls across the width of the last pair.
 pub fn reverb_return(m: &Model, mix: usize) -> Element<'_, Message> {
+    let body = column![
+        ReverbGraph::new(m.unit(reverb::DECAY), m.unit(reverb::BLEND)).mini(),
+        reverb_knobs(m, Style::Small),
+    ]
+    .spacing(8);
+    let (on, toggle) = return_power(m, mix);
+    container(card(
+        "Reverb",
+        Some((on, toggle)),
+        Some(Message::Open(Editor::Reverb)),
+        body,
+    ))
+    .width(2.0 * layout::STRIP)
+    .padding([4, 10])
+    .into()
+}
+
+/// The reverb return's power switch: it mutes the return in `mix`, as the
+/// device has no reverb on/off.
+pub fn return_power(m: &Model, mix: usize) -> (bool, Message) {
+    let on = [NODES - 2, NODES - 1]
+        .iter()
+        .all(|&n| !m.mixer.send(n, mix).mute);
+    (on, Message::ReturnOn(!on))
+}
+
+/// Decay, damping and blend knobs side by side.
+pub fn reverb_knobs(m: &Model, style: Style) -> Element<'_, Message> {
     let decay = m.unit(reverb::DECAY);
     let blend = m.unit(reverb::BLEND);
     let damping = m.hz(reverb::DAMPING).clamp(20.0, 20_000.0);
     let knob = |label: &str, k: Knob<'static, Message>| {
-        column![k, caption(label, 10.0, p::MUTED)]
+        column![k.style(style), caption(label, 10.0, p::MUTED)]
             .spacing(2)
             .align_x(Alignment::Center)
             .width(Length::Fill)
     };
-    let body = column![
-        ReverbGraph::new(decay, blend).mini(),
-        row![
-            knob(
-                "Decay",
-                Knob::new(decay, (0.0, 1.0), |x| Message::Unit(reverb::DECAY, x))
-                    .default(0.6)
-                    .step(0.01)
-                    .readout(format!("{:.0}", decay * 100.0))
-                    .labels("Short", "Long", ""),
-            ),
-            knob(
-                "Damping",
-                Knob::new(damping, (20.0, 20_000.0), |x| Message::Hz(
-                    reverb::DAMPING,
-                    x
-                ))
-                .default(8_000.0)
-                .step(10.0)
-                .taper(Taper::Power(0.35))
-                .readout(format!("{:.1}k", damping / 1000.0))
-                .labels("", "", "Hz"),
-            ),
-            knob(
-                "Blend",
-                Knob::new(blend, (0.0, 1.0), |x| Message::Unit(reverb::BLEND, x))
-                    .default(0.8)
-                    .step(0.01)
-                    .readout(format!("{:.0}", blend * 100.0))
-                    .labels("Early", "Late", ""),
-            ),
-        ],
+    row![
+        knob(
+            "Decay",
+            Knob::new(decay, (0.0, 1.0), |x| Message::Unit(reverb::DECAY, x))
+                .default(0.6)
+                .step(0.01)
+                .readout(format!("{:.0}", decay * 100.0))
+                .labels("Short", "Long", ""),
+        ),
+        knob(
+            "Damping",
+            Knob::new(damping, (20.0, 20_000.0), |x| Message::Hz(
+                reverb::DAMPING,
+                x
+            ))
+            .default(8_000.0)
+            .step(10.0)
+            .taper(Taper::Power(0.35))
+            .readout(format!("{:.1}k", damping / 1000.0))
+            .labels("", "", "Hz"),
+        ),
+        knob(
+            "Blend",
+            Knob::new(blend, (0.0, 1.0), |x| Message::Unit(reverb::BLEND, x))
+                .default(0.8)
+                .step(0.01)
+                .readout(format!("{:.0}", blend * 100.0))
+                .labels("Early", "Late", ""),
+        ),
     ]
-    .spacing(8);
-    let returns = [NODES - 2, NODES - 1];
-    let on = returns.iter().all(|&n| !m.mixer.send(n, mix).mute);
-    let power = Some((on, Message::ReturnOn(!on)));
-    container(card("Reverb", power, None, body))
-        .width(2.0 * layout::STRIP)
-        .padding([4, 10])
-        .into()
+    .into()
 }

@@ -82,6 +82,7 @@ pub enum Tab {
 pub enum Editor {
     Eq(u8),
     Comp(u8),
+    Reverb,
 }
 
 pub struct App {

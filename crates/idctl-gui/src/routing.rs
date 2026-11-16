@@ -74,8 +74,9 @@ impl State {
 #[derive(Debug, Clone)]
 pub enum Msg {
     Page(Page),
-    /// Digital pair index and whether it is now mono.
-    Mode(usize, bool),
+    /// Digital pair index; `None` makes it mono, `Some(base)` stereo with
+    /// both slots taken from the source pair starting at bus `base`.
+    Mode(usize, Option<u8>),
     /// Route `source` (the column's left bus id) to `slot`. A stereo pick
     /// also routes the next slot to the right bus.
     Pick {
@@ -169,12 +170,17 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<(ParamAddr, Vec<u8>)> {
             state.page = page;
             Vec::new()
         }
-        Msg::Mode(pair, mono) => {
-            if let Some(slot) = state.mono.get_mut(pair) {
-                *slot = mono;
+        Msg::Mode(pair, stereo) => match (state.mono.get_mut(pair), stereo) {
+            (Some(mono), None) => {
+                *mono = true;
+                Vec::new()
             }
-            Vec::new()
-        }
+            (Some(mono), Some(base)) if *mono => {
+                *mono = false;
+                pick(DIGITAL_FIRST_SLOT + 2 * pair as u8, base, true)
+            }
+            _ => Vec::new(),
+        },
         Msg::Pick {
             slot,
             source,
@@ -261,9 +267,20 @@ mod tests {
             },
         );
         assert_eq!(writes.len(), 2);
-        assert!(update(&mut state, Msg::Mode(2, true)).is_empty());
+        assert!(update(&mut state, Msg::Mode(2, None)).is_empty());
         assert_eq!(state.mono, [false, false, true, false]);
-        assert!(update(&mut state, Msg::Mode(9, true)).is_empty());
+        assert!(update(&mut state, Msg::Mode(9, None)).is_empty());
+        // Back to stereo: the right slot follows the left source again.
+        let slot = DIGITAL_FIRST_SLOT + 4;
+        assert_eq!(
+            update(&mut state, Msg::Mode(2, Some(MIX_A))),
+            vec![
+                (output::source(slot), vec![MIX_A]),
+                (output::source(slot + 1), vec![MIX_A + 1]),
+            ]
+        );
+        assert_eq!(state.mono, [false; 4]);
+        assert!(update(&mut state, Msg::Mode(2, Some(MIX_A))).is_empty());
         assert!(update(&mut state, Msg::Page(Page::Digital)).is_empty());
         assert_eq!(state.page, Page::Digital);
     }

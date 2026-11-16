@@ -93,16 +93,48 @@ fn headers<'a>() -> Element<'a, Msg> {
             tail(),
         ]
         .spacing(SPACING),
+        row![
+            lead(),
+            row![
+                space().width(CELL_WIDTH / 2.0),
+                main_mix_bracket(monitoring - CELL_WIDTH),
+                space().width(columns - monitoring + CELL_WIDTH / 2.0),
+            ],
+            tail(),
+        ]
+        .spacing(SPACING),
         row![lead(), names, tail()].spacing(SPACING),
     ]
     .spacing(8)
     .into()
 }
 
+/// MAIN MIX caption over a rule spanning the monitoring columns' centres.
+fn main_mix_bracket<'a>(width: f32) -> Element<'a, Msg> {
+    let rule = || {
+        container(
+            container(space().height(1.5))
+                .width(Length::Fill)
+                .style(theme::fill(p::MUTED)),
+        )
+        .center_y(Length::Fill)
+    };
+    row![rule(), caption("Main mix", 9.0, p::MUTED), rule()]
+        .spacing(6)
+        .width(width)
+        .height(14)
+        .align_y(Alignment::Center)
+        .into()
+}
+
 fn output_row<'a>(r: &Row, model: &Model, state: &State) -> Element<'a, Msg> {
-    let selected = r.selected(model.byte(output::source(r.slot)));
+    let source = model.byte(output::source(r.slot));
+    let selected = r.selected(source);
     let toggle: Element<'a, Msg> = match r.toggle {
-        Some(pair) => mode_toggle(pair, state.mono[pair]),
+        Some(pair) => {
+            let base = selected.and_then(|i| r.cells[i]).unwrap_or(source);
+            mode_toggle(pair, state.mono[pair], base)
+        }
         None => space().width(TOGGLE_WIDTH).into(),
     };
     let cells = row(r.cells.iter().enumerate().map(|(i, cell)| {
@@ -130,11 +162,11 @@ fn output_row<'a>(r: &Row, model: &Model, state: &State) -> Element<'a, Msg> {
         .into()
     }));
     row![
-        row![toggle, label_box(&r.name, NAME_WIDTH, p::TEXT)]
+        row![toggle, name_box(&r.name)]
             .spacing(SPACING)
             .align_y(Alignment::Center),
         cells,
-        label_box(&r.destination, DESTINATION_WIDTH, p::MUTED),
+        destination_box(&r.destination, selected == Some(HEADERS.len() - 1)),
     ]
     .spacing(SPACING)
     .align_y(Alignment::Center)
@@ -142,7 +174,7 @@ fn output_row<'a>(r: &Row, model: &Model, state: &State) -> Element<'a, Msg> {
 }
 
 /// MONO | STEREO segmented switch of one digital pair.
-fn mode_toggle<'a>(pair: usize, mono: bool) -> Element<'a, Msg> {
+fn mode_toggle<'a>(pair: usize, mono: bool, base: u8) -> Element<'a, Msg> {
     let half = |label: &str, active: bool, msg: Msg| {
         button(
             container(caption(
@@ -158,18 +190,37 @@ fn mode_toggle<'a>(pair: usize, mono: bool) -> Element<'a, Msg> {
         .on_press(msg)
     };
     row![
-        half("Mono", mono, Msg::Mode(pair, true)),
-        half("Stereo", !mono, Msg::Mode(pair, false)),
+        half("Mono", mono, Msg::Mode(pair, None)),
+        half("Stereo", !mono, Msg::Mode(pair, Some(base))),
     ]
     .width(TOGGLE_WIDTH)
     .into()
 }
 
-fn label_box<'a>(label: &str, width: f32, color: iced::Color) -> Element<'a, Msg> {
-    container(caption(label, 10.0, color))
+fn name_box<'a>(name: &str) -> Element<'a, Msg> {
+    container(caption(name, 10.0, p::TEXT))
         .padding([9, 12])
-        .width(width)
+        .width(NAME_WIDTH)
         .style(theme::well)
+        .into()
+}
+
+/// What Virtual thru feeds; outlined while Virtual thru is the source.
+fn destination_box<'a>(label: &str, lit: bool) -> Element<'a, Msg> {
+    container(caption(label, 10.0, if lit { p::TEXT } else { p::MUTED }))
+        .padding([9, 12])
+        .width(DESTINATION_WIDTH)
+        .style(move |t| {
+            let well = theme::well(t);
+            if lit {
+                container::Style {
+                    border: well.border.color(p::TEXT).width(1.5),
+                    ..well
+                }
+            } else {
+                well
+            }
+        })
         .into()
 }
 

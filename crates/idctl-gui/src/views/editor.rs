@@ -4,13 +4,15 @@ use iced::widget::{button, column, container, mouse_area, opaque, row, space, te
 use iced::{Alignment, Color, Element, Length};
 
 use idctl_protocol::dsp::{comp, Band};
+use idctl_protocol::params::reverb;
 
 use super::cards::{self, dsp_rate, dsp_running};
 use super::key;
 use crate::channel_dsp::DspEdit;
 use crate::model::channel;
 use crate::theme::{self, caption, palette as p, BOLD};
-use crate::widgets::{CompGraph, EqGraph, Knob, Taper};
+use crate::widgets::knob::Style;
+use crate::widgets::{CompGraph, EqGraph, Knob, ReverbGraph, Taper};
 use crate::{App, Editor, Message};
 
 const PANEL_WIDTH: f32 = 760.0;
@@ -21,32 +23,32 @@ const GR_RANGE: f32 = 24.0;
 const GR_HEIGHT: f32 = 220.0;
 
 pub fn view(app: &App, editor: Editor) -> Element<'_, Message> {
-    let (ch, title, power, body) = match editor {
+    let (heading, power, body) = match editor {
         Editor::Eq(ch) => {
             let d = app.dsp[usize::from(ch)];
             let power = (d.eq_on, Message::Dsp(ch, DspEdit::EqOn(!d.eq_on)));
-            (ch, "EQ", power, eq(app, ch))
+            (heading(ch, "EQ"), power, eq(app, ch))
         }
         Editor::Comp(ch) => {
             let on = cards::comp(&app.model, ch).on;
             (
-                ch,
-                "Compressor",
+                heading(ch, "Compressor"),
                 (on, Message::CompOn(ch, !on)),
                 compressor(app, ch),
             )
         }
+        Editor::Reverb => (
+            "REVERB".to_string(),
+            cards::return_power(&app.model, app.mix),
+            reverb(app),
+        ),
     };
-    let name = channel(usize::from(ch)).name;
     let header = row![
         button(space().width(8).height(8))
             .padding(5)
             .style(theme::power(power.0, p::CLOCK))
             .on_press(power.1),
-        text(format!("{name} \u{00b7} {}", title.to_uppercase()))
-            .size(16)
-            .font(BOLD)
-            .color(p::TEXT),
+        text(heading).size(16).font(BOLD).color(p::TEXT),
         space::horizontal(),
         button(text("\u{2715}").size(16))
             .style(theme::flat)
@@ -69,6 +71,26 @@ pub fn view(app: &App, editor: Editor) -> Element<'_, Message> {
     )
     .on_press(Message::Close);
     opaque(scrim)
+}
+
+fn heading(ch: u8, title: &str) -> String {
+    let name = channel(usize::from(ch)).name;
+    format!("{name} \u{00b7} {}", title.to_uppercase())
+}
+
+fn reverb(app: &App) -> Element<'_, Message> {
+    let m = &app.model;
+    column![
+        ReverbGraph::new(m.unit(reverb::DECAY), m.unit(reverb::BLEND)),
+        cards::reverb_knobs(m, Style::Large),
+        caption(
+            "The power switch mutes the reverb return in the selected mix.",
+            11.0,
+            p::MUTED
+        ),
+    ]
+    .spacing(16)
+    .into()
 }
 
 fn eq(app: &App, ch: u8) -> Element<'_, Message> {
