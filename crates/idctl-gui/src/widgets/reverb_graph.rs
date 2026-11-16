@@ -6,8 +6,8 @@ use iced::{color, Color, Element, Length, Point, Rectangle, Renderer, Theme};
 
 use crate::theme::palette as p;
 
-const EARLY: Color = color!(0xb0475a);
-const LATE: Color = color!(0x3fa371);
+const EARLY: Color = color!(0xff8fc9);
+const LATE: Color = color!(0x3aa0ff);
 const FULL_HEIGHT: f32 = 160.0;
 const MINI_HEIGHT: f32 = 60.0;
 const DIM: f32 = 0.35;

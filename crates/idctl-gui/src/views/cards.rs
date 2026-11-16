@@ -2,8 +2,8 @@
 //! compressor and EQ (in processing order), reverb send, and the reverb
 //! return that spans the last pair.
 
-use iced::widget::{button, column, container, row, slider, space, text, Column};
-use iced::{Alignment, Element, Length};
+use iced::widget::{button, column, container, mouse_area, row, slider, space, text, Column};
+use iced::{mouse, Alignment, Element, Length};
 
 use idctl_protocol::dsp::{self, comp};
 use idctl_protocol::params::{input, reverb};
@@ -95,23 +95,24 @@ fn card<'a>(
     header = header
         .push(caption(title, 11.0, p::MUTED))
         .push(space::horizontal());
+    let mut body = body.into();
     if let Some(msg) = pop_out {
         header = header.push(
             button(text("\u{2197}").size(13))
                 .padding([0, 2])
                 .style(theme::flat)
-                .on_press(msg),
+                .on_press(msg.clone()),
         );
+        body = mouse_area(body)
+            .on_press(msg)
+            .interaction(mouse::Interaction::Pointer)
+            .into();
     }
-    container(
-        column![header, body.into()]
-            .spacing(6)
-            .align_x(Alignment::Center),
-    )
-    .padding(8)
-    .width(Length::Fill)
-    .style(theme::card)
-    .into()
+    container(column![header, body].spacing(6).align_x(Alignment::Center))
+        .padding(8)
+        .width(Length::Fill)
+        .style(theme::card)
+        .into()
 }
 
 fn flag<'a>(
@@ -257,7 +258,7 @@ fn comp_card(m: &Model, ch: u8) -> Element<'_, Message> {
     let c = comp(m, ch);
     let running = dsp_running(m);
     card(
-        "Compressor",
+        "Comp",
         Some((c.on, Message::CompOn(ch, !c.on))),
         Some(Message::Open(Editor::Comp(ch))),
         CompGraph::new(c.threshold, c.ratio, c.makeup)

@@ -19,20 +19,20 @@ pub mod palette {
     pub const DARK_TEXT: Color = color!(0x1c1e21);
     pub const MUTED: Color = color!(0x8e9196);
     pub const FAINT: Color = color!(0x5d6065);
-    pub const MIC: Color = color!(0xa18cf2);
-    pub const OPTICAL: Color = color!(0x93b5ee);
-    pub const COMPUTER: Color = color!(0x7fd0c8);
-    pub const REVERB: Color = color!(0xe3a35c);
-    pub const ARC_START: Color = color!(0xa3a6f2);
-    pub const ARC_END: Color = color!(0x8fd3e3);
-    pub const MONITORING: Color = color!(0xe2237c);
-    pub const CLOCK: Color = color!(0x3fd1a0);
-    pub const SELECTOR: Color = color!(0x5b9dff);
-    pub const METER_LOW: Color = color!(0x4cc38a);
-    pub const METER_MID: Color = color!(0xe6c547);
-    pub const METER_HIGH: Color = color!(0xe0454a);
-    pub const MUTE_ON: Color = color!(0xe0454a);
-    pub const SOLO_ON: Color = color!(0xe6c547);
+    pub const MIC: Color = color!(0xff8fc9);
+    pub const OPTICAL: Color = color!(0xff9d6a);
+    pub const COMPUTER: Color = color!(0x3aa0ff);
+    pub const REVERB: Color = color!(0xf4f4f1);
+    pub const ARC_START: Color = color!(0x3aa0ff);
+    pub const ARC_END: Color = color!(0x7cc4ff);
+    pub const MONITORING: Color = color!(0x1fb28a);
+    pub const CLOCK: Color = color!(0x1fb28a);
+    pub const SELECTOR: Color = color!(0x3aa0ff);
+    pub const METER_LOW: Color = color!(0x1fb28a);
+    pub const METER_MID: Color = color!(0xff9d6a);
+    pub const METER_HIGH: Color = color!(0xff4f6a);
+    pub const MUTE_ON: Color = color!(0xff4f6a);
+    pub const SOLO_ON: Color = color!(0xff9d6a);
 }
 use palette as p;
 
