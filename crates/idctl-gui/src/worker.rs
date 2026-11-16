@@ -2,7 +2,7 @@
 //!
 //! The UI never touches USB. It sends [`Command`]s and drains [`Event`]s.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -14,6 +14,8 @@ use crate::watch;
 
 const POLL: Duration = Duration::from_millis(40);
 const RETRY: Duration = Duration::from_secs(1);
+/// How long after a write its echo in the change list is ignored.
+const ECHO: Duration = Duration::from_millis(500);
 
 pub enum Command {
     Write(ParamAddr, Vec<u8>),
@@ -65,7 +67,7 @@ fn serve(
         refresh(dev, addr, len, events)?;
     }
     let _ = events.send(Event::Loaded);
-    let mut last_written = HashSet::new();
+    let mut recent: HashMap<ParamAddr, Instant> = HashMap::new();
     loop {
         let started = Instant::now();
 
@@ -87,26 +89,26 @@ fn serve(
                 }
             }
         }
-        // The device flags our own writes as changes. Reading them back
-        // mid-drag would pull the control to an older value, so skip any
-        // parameter written this pass or the one before.
-        let written: HashSet<ParamAddr> = latest.keys().copied().collect();
+        // The device flags our own writes as changes, sometimes a few passes
+        // later. Reading them back mid-drag would pull the control to an
+        // older value, so skip anything we wrote within the echo window.
         for (addr, data) in latest {
             dev.set(addr, &data)?;
+            recent.insert(addr, started);
         }
         for ((addr, _), data) in blobs {
             dev.mem_write(addr, &data)?;
         }
+        recent.retain(|_, at| started.duration_since(*at) < ECHO);
 
         for addr in dev.pending_changes()? {
-            if written.contains(&addr) || last_written.contains(&addr) {
+            if recent.contains_key(&addr) {
                 continue;
             }
             if let Some(&(_, len)) = watched.iter().find(|(a, _)| *a == addr) {
                 refresh(dev, addr, len, events)?;
             }
         }
-        last_written = written;
         refresh(dev, params::system::SAMPLE_RATE, 4, events)?;
         for (group, count) in [
             params::meters::SOURCES,

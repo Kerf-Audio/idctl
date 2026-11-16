@@ -70,8 +70,7 @@ impl Mixer {
             let s = &mut self.sends[n][mix];
             match edit {
                 Edit::Level(db) => s.level = db,
-                Edit::Pan(p) if partner.is_none() => s.pan = p.clamp(-1.0, 1.0),
-                Edit::Pan(_) => {}
+                Edit::Pan(p) => s.pan = p.clamp(-1.0, 1.0),
                 Edit::Mute => s.mute = mute,
                 Edit::Solo => s.solo = solo,
             }
@@ -92,10 +91,11 @@ impl Mixer {
         let (l, r) = (2 * pair, 2 * pair + 1);
         let mut out = Writes::new();
         for mix in 0..MIX_COUNT {
-            let (pl, pr) = if on { (-1.0, 1.0) } else { (0.0, 0.0) };
+            // Linked, the pan knob becomes the pair's balance; unlinked, each
+            // node pans from the centre. Both start centred.
             let lead = self.sends[l][mix];
-            self.sends[l][mix].pan = pl;
-            self.sends[r][mix] = Send { pan: pr, ..lead };
+            self.sends[l][mix].pan = 0.0;
+            self.sends[r][mix] = Send { pan: 0.0, ..lead };
             out.extend(self.gains(l, mix));
             out.extend(self.gains(r, mix));
         }
@@ -109,6 +109,14 @@ impl Mixer {
         let silent = s.mute || (any_solo && !s.solo);
         let (l, r) = if silent {
             (OFF_DB, OFF_DB)
+        } else if self.linked[node / 2] {
+            let right = node % 2 == 1;
+            let g = (s.level + balance_trim(s.pan, right)).max(OFF_DB);
+            if right {
+                (OFF_DB, g)
+            } else {
+                (g, OFF_DB)
+            }
         } else {
             split(s.level, s.pan)
         };
@@ -145,6 +153,24 @@ impl Mixer {
             return;
         }
         let (level, pan) = join(self.device[node][mix].0, self.device[node][mix].1);
+        let pair = node / 2;
+        if self.linked[pair] {
+            // Each side of a linked pair carries the level less its balance
+            // trim; the balance itself is host state.
+            let right = node % 2 == 1;
+            let trim = balance_trim(self.sends[node][mix].pan, right);
+            if trim > OFF_DB {
+                let side = if right {
+                    self.device[node][mix].1
+                } else {
+                    self.device[node][mix].0
+                };
+                for n in [2 * pair, 2 * pair + 1] {
+                    self.sends[n][mix].level = (side - trim).max(OFF_DB);
+                }
+            }
+            return;
+        }
         let s = &mut self.sends[node][mix];
         s.level = level;
         if let Some(p) = pan {
@@ -153,12 +179,42 @@ impl Mixer {
     }
 
     /// After the first full read, mark pairs whose nodes sit hard left/right
-    /// at equal level in the main mix as linked.
+    /// in the main mix as linked, and turn their gains in every mix into a
+    /// shared level and balance.
     pub fn detect_links(&mut self) {
         for pair in 0..NODES / 2 {
-            let (l, r) = (self.sends[2 * pair][0], self.sends[2 * pair + 1][0]);
-            self.linked[pair] = l.pan <= -0.99 && r.pan >= 0.99 && (l.level - r.level).abs() < 0.01;
+            let (a, b) = (2 * pair, 2 * pair + 1);
+            let (l, r) = (self.sends[a][0], self.sends[b][0]);
+            self.linked[pair] = l.pan <= -0.99 && r.pan >= 0.99;
+            if !self.linked[pair] {
+                continue;
+            }
+            for mix in 0..MIX_COUNT {
+                if self.seen[a][mix] != 0b11 || self.seen[b][mix] != 0b11 {
+                    continue;
+                }
+                let (dl, dr) = (self.device[a][mix].0, self.device[b][mix].1);
+                let (level, balance) = if dl >= dr {
+                    (dl, to_lin(dr - dl) - 1.0)
+                } else {
+                    (dr, 1.0 - to_lin(dl - dr))
+                };
+                for n in [a, b] {
+                    self.sends[n][mix].level = level;
+                    self.sends[n][mix].pan = balance;
+                }
+            }
         }
+    }
+}
+
+/// A linked pair's balance as a dB trim on one side: 0 dB at centre, off at
+/// the far opposite end.
+fn balance_trim(balance: f32, right_side: bool) -> f32 {
+    if right_side {
+        to_db(1.0 + balance.min(0.0))
+    } else {
+        to_db(1.0 - balance.max(0.0))
     }
 }
 
@@ -246,6 +302,26 @@ mod tests {
         let w = m.edit(11, 1, Edit::Mute);
         assert!(w.iter().all(|(_, d)| decode_db(d) == Some(OFF_DB)));
         assert!(m.send(10, 1).mute && m.send(11, 1).mute);
+    }
+
+    #[test]
+    fn detected_pair_keeps_sides_in_every_mix_and_balance_trims_one_side() {
+        let mut m = Mixer::default();
+        for mix in 0..MIX_COUNT as u8 {
+            m.device_gain(mixer::gain_left(10, mix), 0.0);
+            m.device_gain(mixer::gain_right(10, mix), OFF_DB);
+            m.device_gain(mixer::gain_left(11, mix), OFF_DB);
+            m.device_gain(mixer::gain_right(11, mix), 0.0);
+        }
+        m.detect_links();
+        let w = m.edit(10, REVERB_MIX, Edit::Level(-6.0));
+        assert_eq!(db_of(&w, mixer::gain_left(10, 3)), -6.0);
+        assert_eq!(db_of(&w, mixer::gain_right(10, 3)), OFF_DB);
+        assert_eq!(db_of(&w, mixer::gain_left(11, 3)), OFF_DB);
+        assert_eq!(db_of(&w, mixer::gain_right(11, 3)), -6.0);
+        let w = m.edit(11, REVERB_MIX, Edit::Pan(0.5));
+        assert!((db_of(&w, mixer::gain_left(10, 3)) + 12.02).abs() < 0.01);
+        assert_eq!(db_of(&w, mixer::gain_right(11, 3)), -6.0);
     }
 
     #[test]
