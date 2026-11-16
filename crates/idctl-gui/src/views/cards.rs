@@ -10,7 +10,7 @@ use idctl_protocol::params::{input, reverb};
 
 use super::{key, layout};
 use crate::channel_dsp::{ChannelDsp, DspEdit, DSP_CHANNELS};
-use crate::mix::{OFF_DB, REVERB_MIX};
+use crate::mix::{NODES, OFF_DB, REVERB_MIX};
 use crate::model::{channel, Model};
 use crate::theme::{self, caption, palette as p, BOLD};
 use crate::widgets::{CompGraph, EqGraph, Knob, ReverbGraph, Taper};
@@ -313,8 +313,9 @@ fn send_card(m: &Model, node: usize) -> Element<'_, Message> {
     card("Reverb", Some((on, Message::SendOn(node))), None, body)
 }
 
-/// Reverb return controls across the width of the last pair.
-pub fn reverb_return(m: &Model) -> Element<'_, Message> {
+/// Reverb return controls across the width of the last pair. The power
+/// switch mutes the return in `mix`; the device has no reverb on/off.
+pub fn reverb_return(m: &Model, mix: usize) -> Element<'_, Message> {
     let decay = m.unit(reverb::DECAY);
     let blend = m.unit(reverb::BLEND);
     let damping = m.hz(reverb::DAMPING).clamp(20.0, 20_000.0);
@@ -358,7 +359,10 @@ pub fn reverb_return(m: &Model) -> Element<'_, Message> {
         ],
     ]
     .spacing(8);
-    container(card("Reverb", None, None, body))
+    let returns = [NODES - 2, NODES - 1];
+    let on = returns.iter().all(|&n| !m.mixer.send(n, mix).mute);
+    let power = Some((on, Message::ReturnOn(!on)));
+    container(card("Reverb", power, None, body))
         .width(2.0 * layout::STRIP)
         .padding([4, 10])
         .into()

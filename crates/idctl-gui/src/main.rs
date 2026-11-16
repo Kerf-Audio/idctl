@@ -21,7 +21,7 @@ use idctl_protocol::codec;
 use idctl_protocol::dsp::{self, comp};
 use idctl_protocol::params::{input, mixer, output, ANALOGUE_INPUTS};
 use idctl_protocol::ParamAddr;
-use mix::{Edit, Writes, REVERB_MIX};
+use mix::{Edit, Writes, NODES, REVERB_MIX};
 use model::Model;
 use worker::{Command, Event};
 
@@ -54,6 +54,8 @@ pub enum Message {
     Send(usize, f32),
     /// Reverb send on or off.
     SendOn(usize),
+    /// Reverb return on or off in the selected mix.
+    ReturnOn(bool),
     Dsp(u8, DspEdit),
     /// Compressor attack or release in ms.
     Time(ParamAddr, f32),
@@ -202,6 +204,13 @@ fn update(app: &mut App, msg: Message) -> Task<Message> {
         Message::Pan(n, v) => app.mixer_edit(n, Edit::Pan(v)),
         Message::Mute(n) => app.mixer_edit(n, Edit::Mute),
         Message::Solo(n) => app.mixer_edit(n, Edit::Solo),
+        Message::ReturnOn(on) => {
+            for n in [NODES - 2, NODES - 1] {
+                if app.model.mixer.send(n, app.mix).mute == on {
+                    app.mixer_edit(n, Edit::Mute);
+                }
+            }
+        }
         Message::Link(pair) => {
             let writes = app.model.mixer.toggle_link(pair);
             app.write_all(writes);

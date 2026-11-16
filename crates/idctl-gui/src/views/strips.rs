@@ -66,7 +66,7 @@ fn pair_view(app: &App, pair: usize) -> Element<'_, Message> {
             .into())),
     ];
     let sections: Element<'_, Message> = if pair == REVERB_PAIR {
-        cards::reverb_return(m)
+        cards::reverb_return(m, mix)
     } else {
         row(nodes.map(|n| cards::section(app, n))).into()
     };
