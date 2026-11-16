@@ -1,0 +1,2 @@
+# Let the logged-in user open the Audient iD2+ for idctl-gui.
+SUBSYSTEM=="usb", ATTR{idVendor}=="2708", ATTR{idProduct}=="0016", TAG+="uaccess"

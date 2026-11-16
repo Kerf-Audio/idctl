@@ -1,0 +1,10 @@
+[package]
+name = "idctl-protocol"
+description = "Wire protocol for Audient iD mk3 interfaces (no I/O)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]

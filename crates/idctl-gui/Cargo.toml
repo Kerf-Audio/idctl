@@ -1,0 +1,13 @@
+[package]
+name = "idctl-gui"
+description = "Linux control panel for the Audient iD2+"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+idctl-protocol = { path = "../idctl-protocol" }
+idctl-usb = { path = "../idctl-usb" }
+iced = { version = "0.14", features = ["tokio", "canvas"] }

@@ -1,0 +1,13 @@
+[package]
+name = "idctl-usb"
+description = "rusb transport for Audient iD mk3 interfaces"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+idctl-protocol = { path = "../idctl-protocol" }
+rusb = "0.9"
+thiserror = "2"
