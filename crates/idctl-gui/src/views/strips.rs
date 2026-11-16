@@ -18,20 +18,26 @@ use crate::{App, Message};
 /// The reverb return pair, nodes 24 and 25.
 const REVERB_PAIR: usize = NODES / 2 - 1;
 
+/// The horizontal scrollable that holds every strip.
+pub const STRIPS: &str = "strips";
+
 pub fn view(app: &App) -> Element<'_, Message> {
-    responsive(move |size| {
+    let strips = responsive(move |size| {
         let rack = app
             .rack
             .min(size.height - layout::BELOW_RACK)
             .max(layout::RACK_MIN);
         let pairs = row((0..NODES / 2).map(|pair| pair_view(app, pair, rack)));
         scrollable(pairs)
+            .id(STRIPS)
             .direction(scrollable::Direction::Horizontal(
                 scrollable::Scrollbar::new().width(6).scroller_width(6),
             ))
             .into()
-    })
-    .into()
+    });
+    // A wheel nothing else took (faders, knobs and the rack take theirs)
+    // scrolls the strips sideways.
+    mouse_area(strips).on_scroll(Message::StripsWheel).into()
 }
 
 fn group_colour(g: Group) -> Color {

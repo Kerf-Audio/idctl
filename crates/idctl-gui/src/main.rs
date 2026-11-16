@@ -72,6 +72,8 @@ pub enum Message {
     RackGrab,
     RackDrag(f32),
     RackRelease,
+    /// A vertical wheel over the strips that nothing else took.
+    StripsWheel(iced::mouse::ScrollDelta),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -267,6 +269,17 @@ fn update(app: &mut App, msg: Message) -> Task<Message> {
         Message::RackGrab => app.resizing_rack = true,
         Message::RackDrag(height) => app.rack = height.max(views::layout::RACK_MIN),
         Message::RackRelease => app.resizing_rack = false,
+        Message::StripsWheel(delta) => {
+            // Same speed as a scrollable's own wheel: 60 px per line.
+            let y = match delta {
+                iced::mouse::ScrollDelta::Lines { y, .. } => y * 60.0,
+                iced::mouse::ScrollDelta::Pixels { y, .. } => y,
+            };
+            return iced::widget::operation::scroll_by(
+                views::STRIPS,
+                iced::widget::scrollable::AbsoluteOffset { x: -y, y: 0.0 },
+            );
+        }
         Message::Routing(m) => {
             let writes = routing::update(&mut app.routing, m);
             app.write_all(writes);

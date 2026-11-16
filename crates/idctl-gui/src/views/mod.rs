@@ -7,6 +7,8 @@ mod routing;
 mod settings;
 mod strips;
 
+pub use strips::STRIPS;
+
 use iced::widget::{button, column, container, mouse_area, row, space, stack, text};
 use iced::{mouse, Alignment, Color, Element, Length};
 
