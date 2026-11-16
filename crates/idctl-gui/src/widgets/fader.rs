@@ -152,11 +152,18 @@ impl<Message> canvas::Program<Message> for Fader<'_, Message> {
                     ScrollDelta::Lines { y, .. } => *y,
                     ScrollDelta::Pixels { y, .. } => y / 30.0,
                 };
+                if lines == 0.0 {
+                    return None;
+                }
                 let f = (GAIN.fraction(self.value) - lines.signum() * 0.01).clamp(0.0, 1.0);
-                Some(
-                    Action::publish((self.on_change)((GAIN.value(f) * 4.0).round() / 4.0))
-                        .and_capture(),
-                )
+                let v = (GAIN.value(f) * 4.0).round() / 4.0;
+                // Capture even at the end stop: an uncaptured wheel event
+                // scrolls the mixer, which then keeps the wheel for itself.
+                Some(if v == self.value {
+                    Action::capture()
+                } else {
+                    Action::publish((self.on_change)(v)).and_capture()
+                })
             }
             _ => None,
         }
