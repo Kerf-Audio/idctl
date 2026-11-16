@@ -1,12 +1,18 @@
 //! Canvas controls shared by the views.
 
+pub mod comp_graph;
+pub mod eq_graph;
 pub mod fader;
 pub mod knob;
+pub mod reverb_graph;
 
 use iced::Color;
 
+pub use comp_graph::CompGraph;
+pub use eq_graph::EqGraph;
 pub use fader::Fader;
 pub use knob::Knob;
+pub use reverb_graph::ReverbGraph;
 
 /// Maps a control's linear 0..1 range onto its travel.
 #[derive(Clone, Copy)]

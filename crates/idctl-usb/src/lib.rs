@@ -99,6 +99,11 @@ impl Device2Plus {
         self.transfer(&Request::set_param(0, addr, data)).map(drop)
     }
 
+    /// Write a blob to device memory (filter coefficients).
+    pub fn mem_write(&self, addr: ParamAddr, data: &[u8]) -> Result<(), Error> {
+        self.transfer(&Request::mem_write(0, addr, data)).map(drop)
+    }
+
     pub fn set_u8(&self, addr: ParamAddr, v: u8) -> Result<(), Error> {
         self.set(addr, &[v])
     }

@@ -2,7 +2,7 @@
 //!
 //! The UI never touches USB. It sends [`Command`]s and drains [`Event`]s.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -17,6 +17,8 @@ const RETRY: Duration = Duration::from_secs(1);
 
 pub enum Command {
     Write(ParamAddr, Vec<u8>),
+    /// Memory write (coefficient blob); never read back.
+    Mem(ParamAddr, Vec<u8>),
 }
 
 pub enum Event {
@@ -63,25 +65,54 @@ fn serve(
         refresh(dev, addr, len, events)?;
     }
     let _ = events.send(Event::Loaded);
+    let mut last_written = HashSet::new();
     loop {
         let started = Instant::now();
 
         // Sliders flood us; only the newest write per parameter matters.
+        // Coefficient blobs share one address, so they are keyed by their
+        // band and sample-rate header as well.
         let mut latest: HashMap<ParamAddr, Vec<u8>> = HashMap::new();
-        while let Ok(Command::Write(addr, data)) = cmds.try_recv() {
-            latest.insert(addr, data);
+        let mut blobs: HashMap<(ParamAddr, [u8; 8]), Vec<u8>> = HashMap::new();
+        while let Ok(cmd) = cmds.try_recv() {
+            match cmd {
+                Command::Write(addr, data) => {
+                    latest.insert(addr, data);
+                }
+                Command::Mem(addr, data) => {
+                    let mut head = [0; 8];
+                    let n = data.len().min(8);
+                    head[..n].copy_from_slice(&data[..n]);
+                    blobs.insert((addr, head), data);
+                }
+            }
         }
+        // The device flags our own writes as changes. Reading them back
+        // mid-drag would pull the control to an older value, so skip any
+        // parameter written this pass or the one before.
+        let written: HashSet<ParamAddr> = latest.keys().copied().collect();
         for (addr, data) in latest {
             dev.set(addr, &data)?;
         }
+        for ((addr, _), data) in blobs {
+            dev.mem_write(addr, &data)?;
+        }
 
         for addr in dev.pending_changes()? {
+            if written.contains(&addr) || last_written.contains(&addr) {
+                continue;
+            }
             if let Some(&(_, len)) = watched.iter().find(|(a, _)| *a == addr) {
                 refresh(dev, addr, len, events)?;
             }
         }
+        last_written = written;
         refresh(dev, params::system::SAMPLE_RATE, 4, events)?;
-        for (group, count) in [params::meters::SOURCES, params::meters::MIX_BUSES] {
+        for (group, count) in [
+            params::meters::SOURCES,
+            params::meters::MIX_BUSES,
+            params::meters::GAIN_REDUCTION,
+        ] {
             let _ = events.send(Event::Meters(group, dev.meters(group, count)?));
         }
 

@@ -1,9 +1,8 @@
 //! Vendor control transfers understood by iD mk3 firmware.
 //!
-//! Every request is a vendor-class transfer on endpoint 0. The Audient apps
-//! send them with interface recipient; the firmware also answers device
-//! recipient, which is what a client sharing the interface with the kernel
-//! audio driver has to use.
+//! Every request is a vendor-class transfer on endpoint 0 with interface
+//! recipient; the firmware also answers device recipient, which is what a
+//! client sharing the interface with the kernel audio driver has to use.
 
 /// Address of one parameter inside the device's control tree.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -86,7 +85,7 @@ impl Request {
     }
 
     /// Write to device memory (blob parameters such as filter coefficients).
-    pub fn memory(iface: u8, addr: ParamAddr, data: &[u8]) -> Self {
+    pub fn mem_write(iface: u8, addr: ParamAddr, data: &[u8]) -> Self {
         Self::set(code::MEMORY, addr.value(), addr.index(iface), data)
     }
 
@@ -129,6 +128,14 @@ mod tests {
         let r = Request::set_param(2, ParamAddr::new(5, 3, 0x0a), &[1]);
         assert_eq!((r.request, r.value, r.index), (1, 0x0a03, 0x0502));
         assert_eq!(r.data, [1]);
+    }
+
+    #[test]
+    fn mem_write_uses_request_seven() {
+        let r = Request::mem_write(0, ParamAddr::new(7, 3, 0x1d), &[1, 2]);
+        assert_eq!(r.direction, Direction::Out);
+        assert_eq!((r.request, r.value, r.index), (7, 0x1d03, 0x0700));
+        assert_eq!(r.data, [1, 2]);
     }
 
     #[test]

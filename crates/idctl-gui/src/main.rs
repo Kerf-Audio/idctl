@@ -1,7 +1,10 @@
-//! Linux control panel for the Audient iD2+.
+//! iD Mixer: Linux control panel for the iD2+ audio interface.
 
+mod channel_dsp;
+mod clock;
 mod mix;
 mod model;
+mod routing;
 mod theme;
 mod views;
 mod watch;
@@ -11,12 +14,14 @@ mod worker;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
-use iced::{Element, Size, Subscription};
+use iced::{Element, Size, Subscription, Task};
 
+use channel_dsp::{ChannelDsp, DspEdit, DSP_CHANNELS};
 use idctl_protocol::codec;
-use idctl_protocol::params::{input, mixer, output};
+use idctl_protocol::dsp::{self, comp};
+use idctl_protocol::params::{input, mixer, output, ANALOGUE_INPUTS};
 use idctl_protocol::ParamAddr;
-use mix::{Edit, Writes};
+use mix::{Edit, Writes, REVERB_MIX};
 use model::Model;
 use worker::{Command, Event};
 
@@ -34,6 +39,10 @@ pub enum Message {
     Hz(ParamAddr, f32),
     Master(usize, f32),
     Phones(f32),
+    /// Headphone source: base sample-bus id of the stereo pair.
+    PhonesSource(u8),
+    SampleRate(u32),
+    SampleRateSet(Result<(), String>),
     /// GLOW: HMX and LIFT together on one preamp channel.
     Glow(u8, bool),
     Level(usize, f32),
@@ -41,12 +50,32 @@ pub enum Message {
     Mute(usize),
     Solo(usize),
     Link(usize),
+    /// Reverb send level of a node.
+    Send(usize, f32),
+    /// Reverb send on or off.
+    SendOn(usize),
+    Dsp(u8, DspEdit),
+    /// Compressor attack or release in ms.
+    Time(ParamAddr, f32),
+    Ratio(u8, f32),
+    CompOn(u8, bool),
+    Open(Editor),
+    Close,
+    Routing(routing::Msg),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
     Mixer,
+    Routing,
     Settings,
+}
+
+/// Full-size processor editors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Editor {
+    Eq(u8),
+    Comp(u8),
 }
 
 pub struct App {
@@ -55,8 +84,14 @@ pub struct App {
     rx: Receiver<Event>,
     /// `None` while connected, otherwise why not.
     offline: Option<String>,
+    /// Why the last sample-rate change failed.
+    clock_error: Option<String>,
     tab: Tab,
     mix: usize,
+    dsp: [ChannelDsp; DSP_CHANNELS],
+    /// Processor editor shown over the mixer.
+    editor: Option<Editor>,
+    routing: routing::State,
 }
 
 impl App {
@@ -67,8 +102,12 @@ impl App {
             tx,
             rx,
             offline: Some("connecting".into()),
+            clock_error: None,
             tab: Tab::Mixer,
             mix: 0,
+            dsp: [ChannelDsp::default(); DSP_CHANNELS],
+            editor: None,
+            routing: routing::State::default(),
         }
     }
 
@@ -84,8 +123,23 @@ impl App {
     }
 
     fn mixer_edit(&mut self, node: usize, edit: Edit) {
-        let writes = self.model.mixer.edit(node, self.mix, edit);
+        self.mixer_edit_in(node, self.mix, edit);
+    }
+
+    fn mixer_edit_in(&mut self, node: usize, mix: usize, edit: Edit) {
+        let writes = self.model.mixer.edit(node, mix, edit);
         self.write_all(writes);
+    }
+
+    fn dsp_edit(&mut self, ch: u8, edit: DspEdit) {
+        for w in self.dsp[usize::from(ch)].edit(ch, edit) {
+            match w {
+                dsp::Write::Set(addr, data) => self.write(addr, data),
+                dsp::Write::Mem(addr, data) => {
+                    let _ = self.tx.send(Command::Mem(addr, data));
+                }
+            }
+        }
     }
 
     fn drain_events(&mut self) {
@@ -94,20 +148,30 @@ impl App {
                 Event::Connected => self.offline = None,
                 Event::Disconnected(why) => self.offline = Some(why),
                 Event::Param(addr, data) => self.model.apply(addr, data),
-                Event::Loaded => self.model.mixer.detect_links(),
+                Event::Loaded => {
+                    self.model.mixer.detect_links();
+                    let model = &self.model;
+                    self.routing.detect(|slot| model.byte(output::source(slot)));
+                }
                 Event::Meters(group, levels) => self.model.meters(group, levels),
             }
         }
     }
 }
 
-fn update(app: &mut App, msg: Message) {
+fn update(app: &mut App, msg: Message) -> Task<Message> {
     let db = |v: f32| codec::encode_db(v).to_vec();
     match msg {
         Message::Tick => app.drain_events(),
         Message::Tab(t) => app.tab = t,
         Message::SelectMix(m) => app.mix = m,
-        Message::Flag(a, on) => app.write(a, vec![u8::from(on)]),
+        Message::Flag(a, on) => {
+            app.write(a, vec![u8::from(on)]);
+            if let Some(ch) = (0..ANALOGUE_INPUTS).find(|&ch| input::hpf(ch) == a) {
+                let hz = app.dsp[usize::from(ch)].hpf_hz;
+                app.dsp_edit(ch, DspEdit::HpfHz(hz, on));
+            }
+        }
         Message::Byte(a, v) => app.write(a, vec![v]),
         Message::Db(a, v) => app.write(a, db(v)),
         Message::Unit(a, v) => app.write(a, codec::encode_unit(v).to_vec()),
@@ -125,6 +189,15 @@ fn update(app: &mut App, msg: Message) {
                 app.write(output::level(slot), db(v));
             }
         }
+        Message::PhonesSource(base) => {
+            for (side, slot) in (0..).zip(watch::PHONES) {
+                app.write(output::source(slot), vec![base + side]);
+            }
+        }
+        Message::SampleRate(hz) => {
+            return Task::perform(async move { clock::force(hz) }, Message::SampleRateSet);
+        }
+        Message::SampleRateSet(result) => app.clock_error = result.err(),
         Message::Level(n, v) => app.mixer_edit(n, Edit::Level(v)),
         Message::Pan(n, v) => app.mixer_edit(n, Edit::Pan(v)),
         Message::Mute(n) => app.mixer_edit(n, Edit::Mute),
@@ -133,7 +206,30 @@ fn update(app: &mut App, msg: Message) {
             let writes = app.model.mixer.toggle_link(pair);
             app.write_all(writes);
         }
+        Message::Send(n, v) => app.mixer_edit_in(n, REVERB_MIX, Edit::Level(v)),
+        Message::SendOn(n) => {
+            let send = app.model.mixer.send(n, REVERB_MIX);
+            if send.level <= mix::OFF_DB {
+                app.mixer_edit_in(n, REVERB_MIX, Edit::Level(0.0));
+                if send.mute {
+                    app.mixer_edit_in(n, REVERB_MIX, Edit::Mute);
+                }
+            } else {
+                app.mixer_edit_in(n, REVERB_MIX, Edit::Mute);
+            }
+        }
+        Message::Dsp(ch, edit) => app.dsp_edit(ch, edit),
+        Message::Time(a, ms) => app.write(a, comp::encode_time(ms).to_vec()),
+        Message::Ratio(ch, r) => app.write(comp::ratio(ch), comp::encode_ratio(r).to_vec()),
+        Message::CompOn(ch, on) => app.write(comp::mix(ch), comp::encode_mix(on, 1.0).to_vec()),
+        Message::Open(e) => app.editor = Some(e),
+        Message::Close => app.editor = None,
+        Message::Routing(m) => {
+            let writes = routing::update(&mut app.routing, m);
+            app.write_all(writes);
+        }
     }
+    Task::none()
 }
 
 fn view(app: &App) -> Element<'_, Message> {
@@ -148,7 +244,7 @@ fn main() -> iced::Result {
     iced::application(App::new, update, view)
         .subscription(subscription)
         .theme(|_: &App| theme::theme())
-        .title("idctl")
+        .title("iD Mixer")
         .window(iced::window::Settings {
             size: Size::new(views::layout::DEFAULT_WIDTH, views::layout::DEFAULT_HEIGHT),
             min_size: Some(Size::new(

@@ -1,22 +1,23 @@
-//! Channel strips: header, input card (preamps only), then the monitoring
-//! section for the selected mix. Strips are laid out in stereo pairs so the
-//! link key can sit between them.
+//! Channel strips: header, a scrolling stack of processor cards, then the
+//! monitoring section for the selected mix. Strips are laid out in stereo
+//! pairs so the link key can sit between them.
 
 use iced::widget::{column, container, row, scrollable, space, text, Column};
 use iced::{Alignment, Color, Element, Length};
 
-use idctl_protocol::params::input;
-
-use super::{key, layout};
+use super::{cards, key, layout};
 use crate::mix::NODES;
 use crate::model::{channel, Group, Model};
 use crate::theme::{self, caption, palette as p, BOLD};
 use crate::widgets::knob::Style;
 use crate::widgets::{Fader, Knob};
-use crate::Message;
+use crate::{App, Message};
 
-pub fn view(m: &Model, mix: usize) -> Element<'_, Message> {
-    let pairs = row((0..NODES / 2).map(|pair| pair_view(m, mix, pair)));
+/// The reverb return pair, nodes 24 and 25.
+const REVERB_PAIR: usize = NODES / 2 - 1;
+
+pub fn view(app: &App) -> Element<'_, Message> {
+    let pairs = row((0..NODES / 2).map(|pair| pair_view(app, pair)));
     column![container(
         scrollable(pairs).direction(scrollable::Direction::Horizontal(
             scrollable::Scrollbar::new().width(6).scroller_width(6)
@@ -35,7 +36,8 @@ fn group_colour(g: Group) -> Color {
     }
 }
 
-fn pair_view(m: &Model, mix: usize, pair: usize) -> Element<'_, Message> {
+fn pair_view(app: &App, pair: usize) -> Element<'_, Message> {
+    let (m, mix) = (&app.model, app.mix);
     let nodes = [2 * pair, 2 * pair + 1];
     let both = |f: &dyn Fn(usize) -> Element<'static, Message>| row(nodes.map(f));
     let linked = m.mixer.linked(pair);
@@ -63,10 +65,20 @@ fn pair_view(m: &Model, mix: usize, pair: usize) -> Element<'_, Message> {
             .height(Length::Fill)
             .into())),
     ];
+    let sections: Element<'_, Message> = if pair == REVERB_PAIR {
+        cards::reverb_return(m)
+    } else {
+        row(nodes.map(|n| cards::section(app, n))).into()
+    };
     container(
         column![
             row(nodes.map(header)),
-            row(nodes.map(|n| input_card(m, n))),
+            container(
+                scrollable(sections).direction(scrollable::Direction::Vertical(
+                    scrollable::Scrollbar::new().width(4).scroller_width(4)
+                ))
+            )
+            .height(layout::SECTIONS),
             monitoring_bar(pair == 0),
             monitoring.height(Length::Fill),
         ]
@@ -100,87 +112,6 @@ fn header(node: usize) -> Element<'static, Message> {
     .width(layout::STRIP)
     .height(layout::STRIP_HEADER)
     .into()
-}
-
-fn input_card(m: &Model, node: usize) -> Element<'_, Message> {
-    let body: Element<'_, Message> = match channel(node).input {
-        Some(ch) => preamp(m, ch),
-        None => space().into(),
-    };
-    container(body)
-        .width(layout::STRIP)
-        .height(layout::INPUT_CARD)
-        .padding([4, 10])
-        .into()
-}
-
-/// ORBIT impedance settings in the order the arrows step through.
-const ORBIT: [(u8, &str); 3] = [(0, "Punch"), (1, "Smooth"), (3, "Vintage")];
-
-fn preamp(m: &Model, ch: u8) -> Element<'_, Message> {
-    let gain = input::gain(ch);
-    let flag = |label: &str, addr| {
-        let on = m.flag(addr);
-        key(label, on, p::LIT_TOP, Message::Flag(addr, !on))
-    };
-    let glow = m.flag(input::hmx(ch)) && m.flag(input::lift(ch));
-
-    let orbit = m.byte(input::character(ch));
-    let at = ORBIT.iter().position(|&(v, _)| v == orbit).unwrap_or(0);
-    let step =
-        |delta: usize| Message::Byte(input::character(ch), ORBIT[(at + delta) % ORBIT.len()].0);
-    let arrow = |glyph: &str, msg| {
-        iced::widget::button(text(glyph.to_string()).size(10).color(p::TEXT))
-            .padding([4, 6])
-            .style(|_, _| iced::widget::button::Style::default())
-            .on_press(msg)
-    };
-    let orbit_select = container(
-        row![
-            arrow("\u{25c0}", step(ORBIT.len() - 1)),
-            container(caption(ORBIT[at].1, 11.0, p::ARC_START)).center_x(Length::Fill),
-            arrow("\u{25b6}", step(1)),
-        ]
-        .align_y(Alignment::Center),
-    )
-    .padding(2)
-    .style(theme::well);
-
-    let input_card = container(
-        column![
-            caption("Input", 11.0, p::MUTED),
-            Knob::new(m.db(gain), (0.0, 75.0), move |v| Message::Db(gain, v))
-                .step(1.0)
-                .readout(format!("{:.0}", m.db(gain).max(0.0)))
-                .labels("0", "75", "dB"),
-            row![
-                flag("+48V", input::phantom(ch)),
-                flag("Pad", input::pad(ch))
-            ]
-            .spacing(6),
-            flag("HPF", input::hpf(ch)),
-        ]
-        .spacing(5)
-        .align_x(Alignment::Center),
-    )
-    .padding(8)
-    .style(theme::card);
-
-    let tone_card = container(
-        column![
-            caption("Tone", 11.0, p::MUTED),
-            key("Glow", glow, p::LIT_TOP, Message::Glow(ch, !glow)),
-            row![flag("HMX", input::hmx(ch)), flag("Lift", input::lift(ch))].spacing(6),
-            caption("Orbit", 10.0, p::TEXT),
-            orbit_select,
-        ]
-        .spacing(5)
-        .align_x(Alignment::Center),
-    )
-    .padding(8)
-    .style(theme::card);
-
-    column![input_card, tone_card].spacing(6).into()
 }
 
 fn monitoring_bar(first: bool) -> Element<'static, Message> {

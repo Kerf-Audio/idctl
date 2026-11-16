@@ -18,7 +18,7 @@ use crate::widgets::{Fader, Knob, Taper};
 use crate::Message;
 
 /// Volume knob taper: -36 dB sits a third of the way round.
-const VOLUME_TAPER: Taper = Taper::Power(3.4);
+pub(super) const VOLUME_TAPER: Taper = Taper::Power(3.4);
 
 pub const MIX_NAMES: [&str; 4] = ["Main mix", "Mix A", "Mix B", "Reverb"];
 
@@ -81,7 +81,7 @@ pub fn view(m: &Model, mix: usize) -> Element<'_, Message> {
         .menu_style(theme::menu)
         .text_size(12)
         .width(Length::Fill),
-        caption("Phones", 10.0, p::MUTED),
+        caption("Headphones", 10.0, p::MUTED),
         Knob::new(phones, (-128.0, 0.0), Message::Phones)
             .default(-128.0)
             .step(1.0)

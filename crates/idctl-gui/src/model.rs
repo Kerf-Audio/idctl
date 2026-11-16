@@ -14,7 +14,12 @@ pub struct Model {
     pub mixer: Mixer,
     sources: Vec<u16>,
     buses: Vec<u16>,
+    /// Compressor gain, full scale = no reduction.
+    reduction: Vec<u16>,
 }
+
+/// Deepest gain reduction the meter shows, dB.
+const GR_FLOOR: f32 = 60.0;
 
 impl Model {
     /// A value read from the device.
@@ -37,6 +42,8 @@ impl Model {
             self.sources = levels;
         } else if group == meters::MIX_BUSES.0 {
             self.buses = levels;
+        } else if group == meters::GAIN_REDUCTION.0 {
+            self.reduction = levels;
         }
     }
 
@@ -65,11 +72,15 @@ impl Model {
             .unwrap_or(0.0)
     }
 
-    pub fn hz(&self, addr: ParamAddr) -> f32 {
+    pub fn u16(&self, addr: ParamAddr) -> u16 {
         self.raw
             .get(&addr)
-            .and_then(|d| Some(f32::from(u16::from_le_bytes(d.get(..2)?.try_into().ok()?))))
-            .unwrap_or(0.0)
+            .and_then(|d| Some(u16::from_le_bytes(d.get(..2)?.try_into().ok()?)))
+            .unwrap_or(0)
+    }
+
+    pub fn hz(&self, addr: ParamAddr) -> f32 {
+        f32::from(self.u16(addr))
     }
 
     pub fn sample_rate(&self) -> u32 {
@@ -87,6 +98,13 @@ impl Model {
     /// Mix bus level in dBFS (`2 * mix + side`).
     pub fn bus_level(&self, bus: usize) -> Option<f32> {
         codec::meter_db(self.buses.get(bus).copied().unwrap_or(0))
+    }
+
+    /// Compressor gain reduction in dB (positive), 0 when unknown.
+    pub fn gain_reduction(&self, ch: u8) -> f32 {
+        self.reduction.get(usize::from(ch)).map_or(0.0, |&raw| {
+            codec::meter_db(raw).map_or(GR_FLOOR, |db| (-db).min(GR_FLOOR))
+        })
     }
 }
 

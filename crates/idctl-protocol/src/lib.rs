@@ -1,7 +1,8 @@
-//! Audient iD mk3 wire protocol. Pure encode/decode; no I/O.
+//! iD mk3 wire protocol. Pure encode/decode; no I/O.
 
 pub mod changes;
 pub mod codec;
+pub mod dsp;
 pub mod params;
 pub mod request;
 

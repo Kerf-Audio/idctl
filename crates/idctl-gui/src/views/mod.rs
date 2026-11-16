@@ -1,10 +1,13 @@
 //! Window layout: top bar, side navigation, channel strips, monitor panel.
 
+mod cards;
+mod editor;
 mod monitor;
+mod routing;
 mod settings;
 mod strips;
 
-use iced::widget::{button, column, container, row, space, text};
+use iced::widget::{button, column, container, row, space, stack, text};
 use iced::{Alignment, Color, Element, Length};
 
 use crate::theme::{self, caption, palette as p, BOLD};
@@ -20,7 +23,7 @@ pub mod layout {
 
     pub const TOP_BAR: f32 = 58.0;
     pub const STRIP_HEADER: f32 = 80.0;
-    pub const INPUT_CARD: f32 = 338.0;
+    pub const SECTIONS: f32 = 338.0;
     pub const MONITORING_BAR: f32 = 26.0;
     pub const PAN_ROW: f32 = 60.0;
     pub const LINK_ROW: f32 = 22.0;
@@ -30,7 +33,7 @@ pub mod layout {
 
     pub const CHROME_HEIGHT: f32 = TOP_BAR
         + STRIP_HEADER
-        + INPUT_CARD
+        + SECTIONS
         + MONITORING_BAR
         + PAN_ROW
         + LINK_ROW
@@ -47,19 +50,23 @@ pub mod layout {
 
 pub fn root(app: &App) -> Element<'_, Message> {
     let body: Element<'_, Message> = match app.tab {
-        Tab::Mixer => strips::view(&app.model, app.mix),
-        Tab::Settings => settings::view(&app.model),
+        Tab::Mixer => strips::view(app),
+        Tab::Routing => routing::view(&app.model, &app.routing),
+        Tab::Settings => settings::view(app),
     };
-    column![
-        top_bar(app),
-        row![
-            sidebar(app),
-            container(body).width(Length::Fill).height(Length::Fill),
-            monitor::view(&app.model, app.mix)
-        ]
-        .height(Length::Fill),
+    let mut main = row![
+        sidebar(app),
+        container(body).width(Length::Fill).height(Length::Fill)
     ]
-    .into()
+    .height(Length::Fill);
+    if app.tab != Tab::Routing {
+        main = main.push(monitor::view(&app.model, app.mix));
+    }
+    let window = column![top_bar(app), main];
+    match app.editor {
+        Some(e) => stack![window, editor::view(app, e)].into(),
+        None => window.into(),
+    }
 }
 
 fn top_bar(app: &App) -> Element<'_, Message> {
@@ -69,8 +76,7 @@ fn top_bar(app: &App) -> Element<'_, Message> {
     };
     container(
         row![
-            container(text("iD").size(26).font(BOLD).color(p::TEXT)).width(Length::Fill),
-            caption("Audient", 22.0, p::TEXT),
+            container(text("iD Mixer").size(22).font(BOLD).color(p::TEXT)).width(Length::Fill),
             container(status)
                 .width(Length::Fill)
                 .align_x(Alignment::End),
@@ -122,6 +128,7 @@ fn sidebar(app: &App) -> Element<'_, Message> {
     container(
         column![
             tab("Mixer", Tab::Mixer),
+            tab("Routing", Tab::Routing),
             tab("Settings", Tab::Settings),
             space::vertical(),
             column![

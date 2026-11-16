@@ -1,14 +1,18 @@
 //! Every parameter the GUI mirrors, with its wire length.
 
+use idctl_protocol::dsp::{self, comp};
 use idctl_protocol::params::{
     input, mixer, monitor, output, reverb, system, ANALOGUE_INPUTS, MIXES,
 };
 use idctl_protocol::ParamAddr;
 
+use crate::channel_dsp::DSP_CHANNELS;
 use crate::mix::NODES;
 
 /// Output slots of the headphone pair.
 pub const PHONES: [u8; 2] = [4, 5];
+/// Routable output slots: line, ALT, phones, ADAT, loopback.
+pub const OUTPUT_SLOTS: u8 = 16;
 
 pub fn all() -> Vec<(ParamAddr, u16)> {
     let mut v = vec![
@@ -23,9 +27,9 @@ pub fn all() -> Vec<(ParamAddr, u16)> {
         (monitor::TALKBACK, 1),
         (monitor::VOLUME, 2),
         (monitor::SOURCE, 1),
-        (reverb::SIZE, 2),
+        (reverb::DECAY, 2),
         (reverb::DAMPING, 2),
-        (reverb::LEVEL, 2),
+        (reverb::BLEND, 2),
     ];
     for ch in 0..ANALOGUE_INPUTS {
         v.extend([
@@ -51,6 +55,20 @@ pub fn all() -> Vec<(ParamAddr, u16)> {
     }
     for slot in PHONES {
         v.push((output::level(slot), 2));
+    }
+    for slot in 0..OUTPUT_SLOTS {
+        v.push((output::source(slot), 1));
+    }
+    for ch in 0..DSP_CHANNELS as u8 {
+        v.extend([
+            (comp::attack(ch), 2),
+            (comp::release(ch), 2),
+            (comp::threshold(ch), 2),
+            (comp::ratio(ch), 2),
+            (comp::mix(ch), 2),
+            (comp::makeup(ch), 2),
+            (dsp::order(ch), 1),
+        ]);
     }
     v
 }

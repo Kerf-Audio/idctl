@@ -9,6 +9,8 @@ use idctl_protocol::ParamAddr;
 pub const NODES: usize = 26;
 pub const OFF_DB: f32 = -128.0;
 const MIX_COUNT: usize = MIXES as usize;
+/// The last mix feeds the reverb.
+pub const REVERB_MIX: usize = MIX_COUNT - 1;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Send {

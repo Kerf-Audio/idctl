@@ -34,6 +34,8 @@ pub mod meters {
     pub const MIX_BUSES: (u16, u16) = (1, 8);
     /// Monitor outputs (main L/R, line 3/4, headphones L/R).
     pub const OUTPUTS: (u16, u16) = (2, 6);
+    /// Compressor gain reduction, one per DSP channel.
+    pub const GAIN_REDUCTION: (u16, u16) = (3, 10);
 }
 
 /// Read-only device state (`inst` 0).
@@ -178,12 +180,12 @@ pub mod mixer {
 /// Comfort Reverb (`inst` 0).
 pub mod reverb {
     use super::*;
-    /// `u16` normalised 0..=1 (name inferred).
-    pub const SIZE: ParamAddr = ParamAddr::new(kind::REVERB, 0, 2);
+    /// `u16` normalised 0..=1, short to long.
+    pub const DECAY: ParamAddr = ParamAddr::new(kind::REVERB, 0, 2);
     /// `u16` Hz, 20..=20000.
     pub const DAMPING: ParamAddr = ParamAddr::new(kind::REVERB, 0, 3);
-    /// `u16` normalised 0..=1 (name inferred).
-    pub const LEVEL: ParamAddr = ParamAddr::new(kind::REVERB, 0, 4);
+    /// `u16` normalised 0..=1, early to late reflections.
+    pub const BLEND: ParamAddr = ParamAddr::new(kind::REVERB, 0, 4);
 }
 
 /// SmartGain (global, `inst` 0).

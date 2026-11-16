@@ -27,6 +27,7 @@ pub mod palette {
     pub const ARC_END: Color = color!(0x8fd3e3);
     pub const MONITORING: Color = color!(0xe2237c);
     pub const CLOCK: Color = color!(0x3fd1a0);
+    pub const SELECTOR: Color = color!(0x5b9dff);
     pub const METER_LOW: Color = color!(0x4cc38a);
     pub const METER_MID: Color = color!(0xe6c547);
     pub const METER_HIGH: Color = color!(0xe0454a);
@@ -58,7 +59,7 @@ pub fn theme() -> Theme {
     )
 }
 
-/// Wide-tracked upper-case label, as Audient sets its captions.
+/// Wide-tracked upper-case label.
 pub fn caption<'a>(s: &str, size: f32, color: Color) -> Text<'a> {
     let tracked: String = s
         .to_uppercase()
@@ -67,7 +68,11 @@ pub fn caption<'a>(s: &str, size: f32, color: Color) -> Text<'a> {
         .collect::<String>()
         .trim_end()
         .to_string();
-    text(tracked).size(size).font(SEMIBOLD).color(color)
+    text(tracked)
+        .size(size)
+        .font(SEMIBOLD)
+        .color(color)
+        .wrapping(text::Wrapping::None)
 }
 
 fn vertical(top: Color, bottom: Color) -> Background {
@@ -125,6 +130,44 @@ pub fn key(lit: bool, accent: Color) -> impl Fn(&Theme, button::Status) -> butto
             },
             snap: true,
         }
+    }
+}
+
+/// Round power switch on a processor card: filled in `accent` when on.
+pub fn power(on: bool, accent: Color) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_, status| {
+        let hover = if matches!(status, button::Status::Hovered) {
+            0.08
+        } else {
+            0.0
+        };
+        let (fill, edge) = if on {
+            (lighten(accent, hover), accent)
+        } else {
+            (lighten(p::BUTTON_BOTTOM, hover), p::FAINT)
+        };
+        button::Style {
+            background: Some(fill.into()),
+            text_color: if on { p::DARK_TEXT } else { p::MUTED },
+            border: Border {
+                color: edge,
+                width: 1.5,
+                radius: 9.0.into(),
+            },
+            ..button::Style::default()
+        }
+    }
+}
+
+/// Flat icon button (arrows, pop-out, swap).
+pub fn flat(_: &Theme, status: button::Status) -> button::Style {
+    button::Style {
+        text_color: if matches!(status, button::Status::Hovered) {
+            p::LIT_TOP
+        } else {
+            p::MUTED
+        },
+        ..button::Style::default()
     }
 }
 
