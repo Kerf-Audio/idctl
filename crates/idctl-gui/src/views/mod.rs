@@ -7,14 +7,15 @@ mod routing;
 mod settings;
 mod strips;
 
-use iced::widget::{button, column, container, row, space, stack, text};
-use iced::{Alignment, Color, Element, Length};
+use iced::widget::{button, column, container, mouse_area, row, space, stack, text};
+use iced::{mouse, Alignment, Color, Element, Length};
 
 use crate::theme::{self, caption, palette as p, BOLD};
 use crate::{App, Message, Tab};
 
-/// Height budget. Everything above the faders is fixed; the faders take the
-/// rest and must keep at least `FADER_MIN` at the minimum window height.
+/// Height budget. Everything above the faders is fixed apart from the rack
+/// of cards, which the user can resize; the faders take the rest and must
+/// keep at least `FADER_MIN` at the minimum window height.
 pub mod layout {
     pub const DEFAULT_WIDTH: f32 = 1500.0;
     pub const DEFAULT_HEIGHT: f32 = 1000.0;
@@ -23,7 +24,9 @@ pub mod layout {
 
     pub const TOP_BAR: f32 = 58.0;
     pub const STRIP_HEADER: f32 = 80.0;
+    /// Default rack height; dragging the monitoring bar changes it.
     pub const SECTIONS: f32 = 338.0;
+    pub const RACK_MIN: f32 = 80.0;
     pub const MONITORING_BAR: f32 = 26.0;
     pub const PAN_ROW: f32 = 60.0;
     pub const LINK_ROW: f32 = 22.0;
@@ -42,6 +45,9 @@ pub mod layout {
 
     /// Faders keep room at the minimum window height; checked at compile time.
     const _: () = assert!(CHROME_HEIGHT + FADER_MIN <= MIN_HEIGHT);
+
+    /// Strip height below the rack, faders at their minimum.
+    pub const BELOW_RACK: f32 = CHROME_HEIGHT - TOP_BAR - SECTIONS + FADER_MIN;
 
     pub const SIDEBAR: f32 = 112.0;
     pub const STRIP: f32 = 137.0;
@@ -62,10 +68,23 @@ pub fn root(app: &App) -> Element<'_, Message> {
     if app.tab != Tab::Routing {
         main = main.push(monitor::view(&app.model, app.mix));
     }
-    let window = column![top_bar(app), main];
+    let window: Element<'_, Message> = if app.resizing_rack {
+        // The whole window follows the drag so a release anywhere ends it.
+        mouse_area(column![top_bar(app), main])
+            .on_move(|at| {
+                Message::RackDrag(
+                    at.y - layout::TOP_BAR - layout::STRIP_HEADER - layout::MONITORING_BAR / 2.0,
+                )
+            })
+            .on_release(Message::RackRelease)
+            .interaction(mouse::Interaction::ResizingVertically)
+            .into()
+    } else {
+        column![top_bar(app), main].into()
+    };
     match app.editor {
         Some(e) => stack![window, editor::view(app, e)].into(),
-        None => window.into(),
+        None => window,
     }
 }
 

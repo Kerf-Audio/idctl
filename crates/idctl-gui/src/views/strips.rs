@@ -2,8 +2,10 @@
 //! monitoring section for the selected mix. Strips are laid out in stereo
 //! pairs so the link key can sit between them.
 
-use iced::widget::{column, container, row, scrollable, space, text, Column};
-use iced::{Alignment, Color, Element, Length};
+use iced::widget::{
+    column, container, mouse_area, responsive, row, scrollable, space, text, Column,
+};
+use iced::{mouse, Alignment, Color, Element, Length};
 
 use super::{cards, key, layout};
 use crate::mix::NODES;
@@ -17,13 +19,18 @@ use crate::{App, Message};
 const REVERB_PAIR: usize = NODES / 2 - 1;
 
 pub fn view(app: &App) -> Element<'_, Message> {
-    let pairs = row((0..NODES / 2).map(|pair| pair_view(app, pair)));
-    column![container(
-        scrollable(pairs).direction(scrollable::Direction::Horizontal(
-            scrollable::Scrollbar::new().width(6).scroller_width(6)
-        ))
-    )
-    .height(Length::Fill),]
+    responsive(move |size| {
+        let rack = app
+            .rack
+            .min(size.height - layout::BELOW_RACK)
+            .max(layout::RACK_MIN);
+        let pairs = row((0..NODES / 2).map(|pair| pair_view(app, pair, rack)));
+        scrollable(pairs)
+            .direction(scrollable::Direction::Horizontal(
+                scrollable::Scrollbar::new().width(6).scroller_width(6),
+            ))
+            .into()
+    })
     .into()
 }
 
@@ -36,7 +43,7 @@ fn group_colour(g: Group) -> Color {
     }
 }
 
-fn pair_view(app: &App, pair: usize) -> Element<'_, Message> {
+fn pair_view(app: &App, pair: usize, rack: f32) -> Element<'_, Message> {
     let (m, mix) = (&app.model, app.mix);
     let nodes = [2 * pair, 2 * pair + 1];
     let both = |f: &dyn Fn(usize) -> Element<'static, Message>| row(nodes.map(f));
@@ -78,7 +85,7 @@ fn pair_view(app: &App, pair: usize) -> Element<'_, Message> {
                     scrollable::Scrollbar::new().width(4).scroller_width(4)
                 ))
             )
-            .height(layout::SECTIONS),
+            .height(rack),
             monitoring_bar(pair == 0),
             monitoring.height(Length::Fill),
         ]
@@ -114,6 +121,7 @@ fn header(node: usize) -> Element<'static, Message> {
     .into()
 }
 
+/// The divider above the monitoring section; dragging it resizes the rack.
 fn monitoring_bar(first: bool) -> Element<'static, Message> {
     let line = container(space())
         .width(Length::Fill)
@@ -127,12 +135,16 @@ fn monitoring_bar(first: bool) -> Element<'static, Message> {
     } else {
         line.into()
     };
-    container(content)
-        .padding([0, 12])
-        .center_y(layout::MONITORING_BAR)
-        .width(2.0 * layout::STRIP)
-        .style(theme::fill(p::CHROME))
-        .into()
+    mouse_area(
+        container(content)
+            .padding([0, 12])
+            .center_y(layout::MONITORING_BAR)
+            .width(2.0 * layout::STRIP)
+            .style(theme::fill(p::CHROME)),
+    )
+    .on_press(Message::RackGrab)
+    .interaction(mouse::Interaction::ResizingVertically)
+    .into()
 }
 
 fn pan(m: &Model, mix: usize, node: usize) -> Element<'static, Message> {

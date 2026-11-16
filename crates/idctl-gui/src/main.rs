@@ -68,6 +68,10 @@ pub enum Message {
     Open(Editor),
     Close,
     Routing(routing::Msg),
+    /// Drag of the monitoring bar: grab, new rack height, release.
+    RackGrab,
+    RackDrag(f32),
+    RackRelease,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,6 +104,10 @@ pub struct App {
     editor: Option<Editor>,
     routing: routing::State,
     talkback: Talkback,
+    /// Height of the card rack above the monitoring section.
+    rack: f32,
+    /// The monitoring bar is being dragged.
+    resizing_rack: bool,
 }
 
 impl App {
@@ -117,6 +125,8 @@ impl App {
             editor: None,
             routing: routing::State::default(),
             talkback: Talkback::default(),
+            rack: views::layout::SECTIONS,
+            resizing_rack: false,
         }
     }
 
@@ -254,6 +264,9 @@ fn update(app: &mut App, msg: Message) -> Task<Message> {
         Message::CompOn(ch, on) => app.write(comp::mix(ch), comp::encode_mix(on, 1.0).to_vec()),
         Message::Open(e) => app.editor = Some(e),
         Message::Close => app.editor = None,
+        Message::RackGrab => app.resizing_rack = true,
+        Message::RackDrag(height) => app.rack = height.max(views::layout::RACK_MIN),
+        Message::RackRelease => app.resizing_rack = false,
         Message::Routing(m) => {
             let writes = routing::update(&mut app.routing, m);
             app.write_all(writes);
