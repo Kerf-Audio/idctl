@@ -70,7 +70,7 @@ pub fn view(m: &Model, mix: usize) -> Element<'_, Message> {
         row![
             flag("\u{25cb}", monitor::MONO),
             flag("M/S", monitor::MID_SIDE),
-            flag("TB", monitor::TALKBACK)
+            talkback(m)
         ]
         .spacing(8),
         caption("Input source", 10.0, p::MUTED),
@@ -98,6 +98,13 @@ pub fn view(m: &Model, mix: usize) -> Element<'_, Message> {
         .height(Length::Fill)
         .style(theme::fill(p::CHROME))
         .into()
+}
+
+/// TB lights for the hardware button as well as for our own switch; the unit
+/// dims the monitors itself while talkback is on.
+fn talkback(m: &Model) -> Element<'_, Message> {
+    let on = m.flag(monitor::TALKBACK_STATE) || m.flag(monitor::TALKBACK);
+    key("TB", on, p::LIT_TOP, Message::Flag(monitor::TALKBACK, !on)).into()
 }
 
 /// Mix list; the selected mix shows its master fader and bus meters.

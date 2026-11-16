@@ -25,6 +25,7 @@ pub fn all() -> Vec<(ParamAddr, u16)> {
         (monitor::DIM, 1),
         (monitor::DIM_LEVEL, 2),
         (monitor::TALKBACK, 1),
+        (monitor::TALKBACK_STATE, 1),
         (monitor::VOLUME, 2),
         (monitor::SOURCE, 1),
         (reverb::DECAY, 2),
