@@ -25,6 +25,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
             card("Sample rate", clock(app)),
             card("Headphones", phones(m)),
             card("Digital I/O", digital(m)),
+            card("Talkback", talkback(app)),
         ]
         .spacing(20),
     ))
@@ -113,5 +114,32 @@ fn digital(m: &Model) -> Element<'_, Message> {
         optical("Optical output", system::OPTICAL_OUTPUT_MODE)
     ]
     .spacing(18)
+    .into()
+}
+
+/// The mic TB sends to Mix A and Mix B while it is held on.
+fn talkback(app: &App) -> Element<'_, Message> {
+    let current = app.talkback.source;
+    let choice = |label: &str, source: Option<usize>| {
+        key(
+            label,
+            current == source,
+            p::LIT_TOP,
+            Message::TalkbackSource(source),
+        )
+    };
+    column![
+        row![
+            choice("Off", None),
+            choice("Mic 1", Some(0)),
+            choice("Mic 2", Some(1))
+        ]
+        .spacing(8)
+        .width(330),
+        text("While TB is on, this mic goes to Mix A and Mix B at 0 dB and the monitors dim.")
+            .size(12)
+            .color(p::MUTED),
+    ]
+    .spacing(10)
     .into()
 }

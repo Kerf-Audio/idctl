@@ -5,6 +5,7 @@ mod clock;
 mod mix;
 mod model;
 mod routing;
+mod talkback;
 mod theme;
 mod views;
 mod watch;
@@ -19,10 +20,11 @@ use iced::{Element, Size, Subscription, Task};
 use channel_dsp::{ChannelDsp, DspEdit, DSP_CHANNELS};
 use idctl_protocol::codec;
 use idctl_protocol::dsp::{self, comp};
-use idctl_protocol::params::{input, mixer, output, ANALOGUE_INPUTS};
+use idctl_protocol::params::{input, mixer, monitor, output, ANALOGUE_INPUTS};
 use idctl_protocol::ParamAddr;
 use mix::{Edit, Writes, NODES, REVERB_MIX};
 use model::Model;
+use talkback::Talkback;
 use worker::{Command, Event};
 
 const TICK: Duration = Duration::from_millis(33);
@@ -43,6 +45,8 @@ pub enum Message {
     PhonesSource(u8),
     SampleRate(u32),
     SampleRateSet(Result<(), String>),
+    /// Mixer node of the talkback mic, or none.
+    TalkbackSource(Option<usize>),
     /// GLOW: HMX and LIFT together on one preamp channel.
     Glow(u8, bool),
     Level(usize, f32),
@@ -94,6 +98,7 @@ pub struct App {
     /// Processor editor shown over the mixer.
     editor: Option<Editor>,
     routing: routing::State,
+    talkback: Talkback,
 }
 
 impl App {
@@ -110,6 +115,7 @@ impl App {
             dsp: [ChannelDsp::default(); DSP_CHANNELS],
             editor: None,
             routing: routing::State::default(),
+            talkback: Talkback::default(),
         }
     }
 
@@ -158,6 +164,13 @@ impl App {
                 Event::Meters(group, levels) => self.model.meters(group, levels),
             }
         }
+        self.follow_talkback();
+    }
+
+    fn follow_talkback(&mut self) {
+        let on = self.model.flag(monitor::TALKBACK_STATE) || self.model.flag(monitor::TALKBACK);
+        let writes = self.talkback.follow(&mut self.model.mixer, on);
+        self.write_all(writes);
     }
 }
 
@@ -173,8 +186,15 @@ fn update(app: &mut App, msg: Message) -> Task<Message> {
                 let hz = app.dsp[usize::from(ch)].hpf_hz;
                 app.dsp_edit(ch, DspEdit::HpfHz(hz, on));
             }
+            app.follow_talkback();
         }
         Message::Byte(a, v) => app.write(a, vec![v]),
+        Message::TalkbackSource(source) => {
+            let writes = app.talkback.follow(&mut app.model.mixer, false);
+            app.write_all(writes);
+            app.talkback.source = source;
+            app.follow_talkback();
+        }
         Message::Db(a, v) => app.write(a, db(v)),
         Message::Unit(a, v) => app.write(a, codec::encode_unit(v).to_vec()),
         Message::Hz(a, hz) => app.write(a, (hz.round() as u16).to_le_bytes().to_vec()),
