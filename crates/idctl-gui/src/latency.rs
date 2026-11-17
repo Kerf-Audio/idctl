@@ -53,9 +53,9 @@ pub struct State {
     pub now: u64,
     frames: Frames,
     monitor: Monitor,
-    /// ALSA nodes in the latest iteration; a change means the interface's
-    /// nodes may have been recreated under new ids or names.
-    alsa_nodes: Vec<u32>,
+    /// Nodes in the latest iteration; a change means the interface's nodes
+    /// may have been recreated, or a stream has come or gone.
+    nodes: Vec<u32>,
     dump_pending: bool,
     pub presets: Presets,
     /// The buffer size in force; none while applications choose their own.
@@ -101,7 +101,7 @@ impl State {
             now: 0,
             frames: Frames::default(),
             monitor: Monitor::new(Vec::new()),
-            alsa_nodes: Vec::new(),
+            nodes: Vec::new(),
             dump_pending: false,
             presets: Presets::default(),
             buffer: None,
@@ -165,8 +165,9 @@ impl State {
             }
             Msg::Dumped(dump) => {
                 self.dump_pending = false;
-                self.interface = dump
-                    .and_then(|d| graph::interface(&d, VENDOR_ID, PRODUCT_ID_ID2_PLUS))
+                let dump = dump.unwrap_or_default();
+                self.monitor.set_listeners(graph::listeners(&dump));
+                self.interface = graph::interface(&dump, VENDOR_ID, PRODUCT_ID_ID2_PLUS)
                     .ok()
                     .flatten();
                 let names = self.interface.iter().flat_map(|i| &i.nodes);
@@ -250,17 +251,13 @@ impl State {
         Task::perform(pw::dump(), Msg::Dumped)
     }
 
-    /// Ask PipeWire again when the set of ALSA nodes changes.
+    /// Ask PipeWire again when the set of nodes changes.
     fn follow_nodes(&mut self, rows: &[Row]) -> Task<Msg> {
-        let alsa: Vec<u32> = rows
-            .iter()
-            .filter(|r| r.name.starts_with("alsa_"))
-            .map(|r| r.id)
-            .collect();
-        if alsa == self.alsa_nodes {
+        let nodes: Vec<u32> = rows.iter().map(|r| r.id).collect();
+        if nodes == self.nodes {
             return Task::none();
         }
-        self.alsa_nodes = alsa;
+        self.nodes = nodes;
         self.dump()
     }
 }

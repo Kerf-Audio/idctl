@@ -86,6 +86,19 @@ pub fn interface(dump: &str, vendor: u16, product: u16) -> Result<Option<Interfa
     }))
 }
 
+/// Names of streams that only listen to an output (level meters,
+/// visualisers). They cannot glitch what is heard, however late they run.
+pub fn listeners(dump: &str) -> Vec<String> {
+    let dump: Value = serde_json::from_str(dump).unwrap_or_default();
+    let objects = dump.as_array().map(Vec::as_slice).unwrap_or_default();
+    objects
+        .iter()
+        .filter(|o| is_type(o, "PipeWire:Interface:Node"))
+        .filter(|o| props(o)["stream.monitor"].as_bool() == Some(true))
+        .filter_map(|o| Some(props(o)["node.name"].as_str()?.to_owned()))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,5 +148,18 @@ mod tests {
         let i = interface(bare, 0x2708, 0x0016).unwrap().unwrap();
         assert!(i.nodes.is_empty());
         assert_eq!(i.profile, "");
+    }
+
+    #[test]
+    fn monitor_streams_are_listeners() {
+        let dump = r#"[
+            {"id":142,"type":"PipeWire:Interface:Node","info":{"props":
+              {"node.name":"quickshell","media.class":"Stream/Input/Audio","stream.monitor":true}}},
+            {"id":150,"type":"PipeWire:Interface:Node","info":{"props":
+              {"node.name":"My DAW","media.class":"Stream/Input/Audio"}}},
+            {"id":151,"type":"PipeWire:Interface:Node","info":{"props":
+              {"node.name":"Player","media.class":"Stream/Output/Audio"}}}]"#;
+        assert_eq!(listeners(dump), ["quickshell"]);
+        assert!(listeners("not json").is_empty());
     }
 }

@@ -362,7 +362,14 @@ fn percent(share: f32) -> String {
 
 fn source<'a>(who: &'a Party, now: u64) -> Element<'a, Message> {
     let over = who.load >= 1.0;
-    let hot = |on: bool, calm: Color| if on { p::MUTE_ON } else { calm };
+    // A listener's lateness is never heard, so it does not get the alarm colour.
+    let alarm = if who.listener { p::MUTED } else { p::MUTE_ON };
+    let hot = |on: bool, calm: Color| if on { alarm } else { calm };
+    let flag = match (who.listener, over) {
+        (true, _) => caption("listening only", 10.0, p::MUTED),
+        (false, true) => caption("over the period", 10.0, p::MUTE_ON),
+        (false, false) => caption("", 10.0, p::MUTED),
+    };
     let last = match who.last_xrun {
         None => ABSENT.to_owned(),
         Some(at) => ago(now.saturating_sub(at)),
@@ -393,11 +400,7 @@ fn source<'a>(who: &'a Party, now: u64) -> Element<'a, Message> {
             PERCENT,
             Alignment::End,
         ))
-        .push(cell(
-            caption(if over { "over the period" } else { "" }, 10.0, p::MUTE_ON),
-            FLAG,
-            Alignment::End,
-        ))
+        .push(cell(flag, FLAG, Alignment::End))
         .into()
 }
 

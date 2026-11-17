@@ -30,6 +30,8 @@ pub struct Party {
     /// Share of the period used in the latest iteration.
     pub load: f32,
     pub peak: f32,
+    /// Only listens to an output: its lateness is never heard.
+    pub listener: bool,
 }
 
 impl Party {
@@ -40,6 +42,7 @@ impl Party {
             last_xrun: None,
             load: 0.0,
             peak: 0.0,
+            listener: false,
         }
     }
 
@@ -67,6 +70,7 @@ pub struct Snapshot {
 
 pub struct Monitor {
     interface_nodes: Vec<String>,
+    listeners: Vec<String>,
     /// Error counter of every node in the previous iteration: the baseline
     /// the next one is measured from.
     seen: HashMap<u32, u64>,
@@ -79,6 +83,7 @@ impl Monitor {
     pub fn new(interface_nodes: Vec<String>) -> Self {
         Self {
             interface_nodes,
+            listeners: Vec::new(),
             seen: HashMap::new(),
             interface: Party::new("Interface"),
             apps: Vec::new(),
@@ -90,8 +95,15 @@ impl Monitor {
         self.interface_nodes = names;
     }
 
+    /// Streams that only listen; their xruns are shown but not charted.
+    pub fn set_listeners(&mut self, names: Vec<String>) {
+        self.listeners = names;
+    }
+
     pub fn reset(&mut self) {
+        let listeners = std::mem::take(&mut self.listeners);
         *self = Self::new(std::mem::take(&mut self.interface_nodes));
+        self.listeners = listeners;
     }
 
     /// Xruns per iteration (interface and apps together), oldest first.
@@ -143,10 +155,13 @@ impl Monitor {
                         self.apps.last_mut().expect("just pushed")
                     }
                 };
+                app.listener = self.listeners.contains(&row.name);
                 app.add(new, at);
                 app.set_load(load);
                 present.push(&row.name);
-                total += new;
+                if !app.listener {
+                    total += new;
+                }
             }
         }
 
@@ -364,5 +379,23 @@ mod tests {
         let s = m.frame(&graph(0, 0, 0, 0.5), 102);
         let names: Vec<&str> = s.apps.iter().map(|a| a.name.as_str()).collect();
         assert_eq!(names, ["My DAW", "Glitchy"]);
+    }
+
+    #[test]
+    fn a_listener_is_marked_and_kept_out_of_the_history() {
+        let mut m = monitor();
+        m.set_listeners(vec!["Meter".into()]);
+        let with = |e| {
+            let mut v = graph(0, 0, 0, 0.5);
+            v.insert(3, row(170, "Meter", true, e, 0.01));
+            v
+        };
+        m.frame(&with(0), 100);
+        let s = m.frame(&with(40), 101);
+        let meter = s.apps.iter().find(|a| a.name == "Meter").unwrap();
+        assert!(meter.listener);
+        assert_eq!(meter.xruns, 40);
+        assert!(!s.apps.iter().find(|a| a.name == "My DAW").unwrap().listener);
+        assert_eq!(m.history().last(), Some(0));
     }
 }
