@@ -136,7 +136,12 @@ fn input_card(app: &App, ch: u8) -> Element<'_, Message> {
             .readout(format!("{:.0}", m.db(gain).max(0.0)))
             .labels("0", "75", "dB"),
         row![
-            flag(m, "+48V", input::phantom(ch)),
+            key(
+                "+48V",
+                m.flag(input::phantom(ch)),
+                p::LIT_TOP,
+                Message::Phantom(ch, !m.flag(input::phantom(ch)))
+            ),
             flag(m, "Pad", input::pad(ch))
         ]
         .spacing(6),

@@ -1,6 +1,7 @@
 //! Window layout: top bar, side navigation, channel strips, monitor panel.
 
 mod cards;
+mod dialog;
 mod editor;
 mod monitor;
 mod routing;
@@ -9,7 +10,7 @@ mod strips;
 
 pub use strips::STRIPS;
 
-use iced::widget::{button, column, container, mouse_area, row, space, stack, text};
+use iced::widget::{button, column, container, mouse_area, opaque, row, space, stack, text};
 use iced::{mouse, Alignment, Color, Element, Length};
 
 use crate::theme::{self, caption, palette as p, BOLD};
@@ -62,14 +63,30 @@ pub fn root(app: &App) -> Element<'_, Message> {
         Tab::Routing => routing::view(&app.model, &app.routing),
         Tab::Settings => settings::view(app),
     };
-    let mut main = row![
-        sidebar(app),
-        container(body).width(Length::Fill).height(Length::Fill)
-    ]
-    .height(Length::Fill);
+    let mut content = row![container(body).width(Length::Fill).height(Length::Fill)];
     if app.tab != Tab::Routing {
-        main = main.push(monitor::view(&app.model, app.mix));
+        content = content.push(monitor::view(&app.model, app.mix));
     }
+    let content: Element<'_, Message> = if app.offline.is_some() {
+        // Nothing can be written without the device: dim the controls and
+        // keep clicks from reaching them.
+        stack![
+            content,
+            opaque(
+                container(space())
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .style(theme::fill(Color {
+                        a: 0.55,
+                        ..p::WINDOW
+                    }))
+            )
+        ]
+        .into()
+    } else {
+        content.into()
+    };
+    let main = row![sidebar(app), content].height(Length::Fill);
     let window: Element<'_, Message> = if app.resizing_rack {
         // The whole window follows the drag so a release anywhere ends it.
         mouse_area(column![top_bar(app), main])
@@ -84,8 +101,12 @@ pub fn root(app: &App) -> Element<'_, Message> {
     } else {
         column![top_bar(app), main].into()
     };
-    match app.editor {
+    let window = match app.editor {
         Some(e) => stack![window, editor::view(app, e)].into(),
+        None => window,
+    };
+    match app.confirm_phantom {
+        Some(ch) => stack![window, dialog::phantom(ch)].into(),
         None => window,
     }
 }

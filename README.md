@@ -30,13 +30,18 @@ Not done yet: polarity, Record FX, SmartGain and clock source.
 
 ## Install
 
-Build with a recent stable Rust:
+Build with Rust 1.90 or newer:
 
 ```sh
 cargo build --release
 ```
 
-The binary is `target/release/idctl-gui`.
+The binary is `target/release/idctl-gui`. To build and install it for your
+user, with the icon and an app-list entry, run:
+
+```sh
+packaging/install-local.sh
+```
 
 Let your user open the device without root by installing the udev rule:
 

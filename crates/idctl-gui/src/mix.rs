@@ -60,6 +60,11 @@ impl Mixer {
         self.linked[pair]
     }
 
+    /// Forget which gains were read: the device is about to be read afresh.
+    pub fn reset_seen(&mut self) {
+        self.seen = Default::default();
+    }
+
     /// Apply a UI edit to `node` in `mix`; returns the gains to write.
     pub fn edit(&mut self, node: usize, mix: usize, edit: Edit) -> Writes {
         let partner = self.linked[node / 2].then_some(node ^ 1);

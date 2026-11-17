@@ -22,6 +22,23 @@ pub enum Error {
     Short { wanted: usize, got: usize },
 }
 
+impl Error {
+    /// A failure that leaves the device attached, worth another try.
+    pub fn is_transient(&self) -> bool {
+        matches!(
+            self,
+            Self::Short { .. }
+                | Self::Usb(
+                    rusb::Error::Timeout
+                        | rusb::Error::Busy
+                        | rusb::Error::Interrupted
+                        | rusb::Error::Overflow
+                        | rusb::Error::Pipe
+                )
+        )
+    }
+}
+
 pub struct Device2Plus {
     handle: DeviceHandle<GlobalContext>,
 }

@@ -5,6 +5,7 @@ members = ["crates/idctl-protocol", "crates/idctl-usb", "crates/idctl-gui"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.90"
 license = "MIT"
 repository = "https://github.com/Kerf-Audio/idctl"
 authors = ["Kerf Audio"]

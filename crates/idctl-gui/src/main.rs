@@ -74,6 +74,33 @@ pub enum Message {
     RackRelease,
     /// A vertical wheel over the strips that nothing else took.
     StripsWheel(iced::mouse::ScrollDelta),
+    /// +48V key pressed: switching on needs confirmation.
+    Phantom(u8, bool),
+    PhantomAnswer(bool),
+    CloseRequested,
+}
+
+impl Message {
+    /// Whether handling the message writes to the device.
+    fn writes_device(&self) -> bool {
+        !matches!(
+            self,
+            Self::Tick
+                | Self::Tab(_)
+                | Self::SelectMix(_)
+                | Self::SampleRate(_)
+                | Self::SampleRateSet(_)
+                | Self::Open(_)
+                | Self::Close
+                | Self::Routing(routing::Msg::Page(_))
+                | Self::RackGrab
+                | Self::RackDrag(_)
+                | Self::RackRelease
+                | Self::StripsWheel(_)
+                | Self::PhantomAnswer(_)
+                | Self::CloseRequested
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -110,6 +137,10 @@ pub struct App {
     rack: f32,
     /// The monitoring bar is being dragged.
     resizing_rack: bool,
+    /// Mic input waiting for the user to confirm phantom power.
+    confirm_phantom: Option<u8>,
+    /// PipeWire's graph rate is forced by us.
+    rate_forced: bool,
 }
 
 impl App {
@@ -129,12 +160,35 @@ impl App {
             talkback: Talkback::default(),
             rack: views::layout::SECTIONS,
             resizing_rack: false,
+            confirm_phantom: None,
+            rate_forced: false,
         }
     }
 
     fn write(&mut self, addr: ParamAddr, data: Vec<u8>) {
+        if self.offline.is_some() {
+            return;
+        }
         self.model.assume(addr, &data);
-        let _ = self.tx.send(Command::Write(addr, data));
+        self.send(Command::Write(addr, data));
+    }
+
+    fn send(&mut self, cmd: Command) {
+        if self.tx.send(cmd).is_err() {
+            self.offline = Some("device thread stopped".into());
+        }
+    }
+
+    /// Let the device thread apply what is queued and stop, and give the
+    /// PipeWire rate back if we forced it.
+    fn shutdown(&mut self) {
+        let (ack_tx, ack_rx) = std::sync::mpsc::channel();
+        if self.tx.send(Command::Quit(ack_tx)).is_ok() {
+            let _ = ack_rx.recv_timeout(Duration::from_secs(1));
+        }
+        if self.rate_forced {
+            clock::release();
+        }
     }
 
     fn write_all(&mut self, writes: Writes) {
@@ -157,7 +211,7 @@ impl App {
             match w {
                 dsp::Write::Set(addr, data) => self.write(addr, data),
                 dsp::Write::Mem(addr, data) => {
-                    let _ = self.tx.send(Command::Mem(addr, data));
+                    self.send(Command::Mem(addr, data));
                 }
             }
         }
@@ -166,7 +220,10 @@ impl App {
     fn drain_events(&mut self) {
         while let Ok(ev) = self.rx.try_recv() {
             match ev {
-                Event::Connected => self.offline = None,
+                Event::Connected => {
+                    self.offline = None;
+                    self.model.mixer.reset_seen();
+                }
                 Event::Disconnected(why) => self.offline = Some(why),
                 Event::Param(addr, data) => self.model.apply(addr, data),
                 Event::Loaded => {
@@ -188,6 +245,9 @@ impl App {
 }
 
 fn update(app: &mut App, msg: Message) -> Task<Message> {
+    if app.offline.is_some() && msg.writes_device() {
+        return Task::none();
+    }
     let db = |v: f32| codec::encode_db(v).to_vec();
     match msg {
         Message::Tick => app.drain_events(),
@@ -230,9 +290,33 @@ fn update(app: &mut App, msg: Message) -> Task<Message> {
             }
         }
         Message::SampleRate(hz) => {
-            return Task::perform(async move { clock::force(hz) }, Message::SampleRateSet);
+            return Task::perform(clock::force(hz), Message::SampleRateSet);
         }
-        Message::SampleRateSet(result) => app.clock_error = result.err(),
+        Message::SampleRateSet(result) => {
+            app.rate_forced |= result.is_ok();
+            app.clock_error = result.err();
+        }
+        Message::Phantom(ch, on) => {
+            if on {
+                app.confirm_phantom = Some(ch);
+            } else {
+                app.write(input::phantom(ch), vec![0]);
+            }
+        }
+        Message::PhantomAnswer(yes) => {
+            if let Some(ch) = app.confirm_phantom.take() {
+                if yes {
+                    app.write(input::phantom(ch), vec![1]);
+                }
+            }
+        }
+        Message::CloseRequested => {
+            // Put the talkback mic back before the device thread stops.
+            let writes = app.talkback.follow(&mut app.model.mixer, false);
+            app.write_all(writes);
+            app.shutdown();
+            return iced::exit();
+        }
         Message::Level(n, v) => app.mixer_edit(n, Edit::Level(v)),
         Message::Pan(n, v) => app.mixer_edit(n, Edit::Pan(v)),
         Message::Mute(n) => app.mixer_edit(n, Edit::Mute),
@@ -293,7 +377,10 @@ fn view(app: &App) -> Element<'_, Message> {
 }
 
 fn subscription(_: &App) -> Subscription<Message> {
-    iced::time::every(TICK).map(|_| Message::Tick)
+    Subscription::batch([
+        iced::time::every(TICK).map(|_| Message::Tick),
+        iced::window::close_requests().map(|_| Message::CloseRequested),
+    ])
 }
 
 fn main() -> iced::Result {
@@ -311,6 +398,7 @@ fn main() -> iced::Result {
                 application_id: "id-mixer".to_string(),
                 ..Default::default()
             },
+            exit_on_close_request: false,
             ..iced::window::Settings::default()
         })
         .run()

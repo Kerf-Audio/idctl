@@ -3,6 +3,7 @@ name = "idctl-gui"
 description = "iD Mixer: Linux control panel for the iD2+"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
@@ -11,3 +12,4 @@ authors.workspace = true
 idctl-protocol = { path = "../idctl-protocol" }
 idctl-usb = { path = "../idctl-usb" }
 iced = { version = "0.14", features = ["tokio", "canvas"] }
+tokio = { version = "1", features = ["process"] }
