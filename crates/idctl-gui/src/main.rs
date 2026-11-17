@@ -20,7 +20,7 @@ use iced::{Element, Size, Subscription, Task};
 use channel_dsp::{ChannelDsp, DspEdit, DSP_CHANNELS};
 use idctl_protocol::codec;
 use idctl_protocol::dsp::{self, comp};
-use idctl_protocol::params::{input, mixer, monitor, output, ANALOGUE_INPUTS};
+use idctl_protocol::params::{input, mixer, output, ANALOGUE_INPUTS};
 use idctl_protocol::ParamAddr;
 use mix::{Edit, Writes, NODES, REVERB_MIX};
 use model::Model;
@@ -238,7 +238,7 @@ impl App {
     }
 
     fn follow_talkback(&mut self) {
-        let on = self.model.flag(monitor::TALKBACK_STATE) || self.model.flag(monitor::TALKBACK);
+        let on = self.model.talking();
         let writes = self.talkback.follow(&mut self.model.mixer, on);
         self.write_all(writes);
     }

@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-use iced::widget::{column, container, pick_list, row, space, Column};
+use iced::widget::{button, column, container, pick_list, row, space, Column};
 use iced::{Alignment, Element, Length};
 
 use idctl_protocol::params::{mixer, monitor, output};
@@ -38,6 +38,12 @@ const SOURCES: [Source; 4] = [
     Source("DAW 1-2", 12),
 ];
 
+/// The unit dims the monitors itself while talkback is on and reports that as
+/// DIM, so the key stays dark until talkback ends.
+fn dim_key(m: &Model) -> button::Button<'_, Message> {
+    let on = m.flag(monitor::DIM) && !m.talking();
+    key("Dim", on, p::LIT_TOP, Message::Flag(monitor::DIM, !on))
+}
 pub fn view(m: &Model, mix: usize) -> Element<'_, Message> {
     let volume = m.db(monitor::VOLUME);
     let flag = |label: &str, addr| {
@@ -58,7 +64,7 @@ pub fn view(m: &Model, mix: usize) -> Element<'_, Message> {
             .labels("-128", "0", "dB"),
         row![
             flag("Mute", monitor::MUTE),
-            flag("Dim", monitor::DIM),
+            dim_key(m),
             key(
                 "Ref",
                 false,
@@ -100,10 +106,9 @@ pub fn view(m: &Model, mix: usize) -> Element<'_, Message> {
         .into()
 }
 
-/// TB lights for the hardware button as well as for our own switch; the unit
-/// dims the monitors itself while talkback is on.
+/// TB lights for the hardware button as well as for our own switch.
 fn talkback(m: &Model) -> Element<'_, Message> {
-    let on = m.flag(monitor::TALKBACK_STATE) || m.flag(monitor::TALKBACK);
+    let on = m.talking();
     key("TB", on, p::LIT_TOP, Message::Flag(monitor::TALKBACK, !on)).into()
 }
 

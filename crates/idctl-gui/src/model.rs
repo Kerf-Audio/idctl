@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use idctl_protocol::codec;
-use idctl_protocol::params::{kind, meters, system};
+use idctl_protocol::params::{kind, meters, monitor, system};
 use idctl_protocol::ParamAddr;
 
 use crate::mix::{Mixer, OFF_DB};
@@ -58,6 +58,10 @@ impl Model {
             .unwrap_or(0)
     }
 
+    /// Talkback is on, from the hardware button or ours.
+    pub fn talking(&self) -> bool {
+        self.flag(monitor::TALKBACK_STATE) || self.flag(monitor::TALKBACK)
+    }
     pub fn db(&self, addr: ParamAddr) -> f32 {
         self.raw
             .get(&addr)
