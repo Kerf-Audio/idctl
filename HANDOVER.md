@@ -59,11 +59,11 @@ Latency page:
 - `views/latency.rs` and `latency.rs` are at the 500-line guideline.
 
 Device:
-- Polarity, Record FX, SmartGain, clock source. Blocked on protocol facts, not
+- Polarity, record effects, auto gain, clock source. Blocked on protocol facts, not
   effort. `params.rs` has no polarity address; input params `0x08` and `0x0c`
   accept writes and could be it, but nothing observable says what they do.
   `record_source` (`0x0d`) has no known values. Clock ids are unknown (a wrong
-  one can drop the clock). SmartGain has addresses and status values but not the
+  one can drop the clock). Auto gain has addresses and status values but not the
   trigger sequence the official app uses. Needs a capture of the official app,
   or a mic signal to test polarity with.
 - The FN button is not assigned. No ramp or ceiling on monitor and headphone

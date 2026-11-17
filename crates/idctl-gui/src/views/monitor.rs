@@ -60,6 +60,7 @@ pub fn view(m: &Model, mix: usize) -> Element<'_, Message> {
             .step(1.0)
             .taper(VOLUME_TAPER)
             .style(Style::Large)
+            .accent(p::MONITORING)
             .readout(format!("{volume:.0}"))
             .labels("-128", "0", "dB"),
         row![
@@ -89,6 +90,7 @@ pub fn view(m: &Model, mix: usize) -> Element<'_, Message> {
         .width(Length::Fill),
         caption("Headphones", 10.0, p::MUTED),
         Knob::new(phones, (-128.0, 0.0), Message::Phones)
+            .accent(p::MONITORING)
             .default(-128.0)
             .step(1.0)
             .taper(VOLUME_TAPER)
@@ -138,10 +140,13 @@ fn mixes(m: &Model, selected: usize) -> Element<'_, Message> {
             .push(title)
             .push(container(caption("Mix master", 9.0, p::MUTED)).padding([0, 16]))
             .push(
-                container(Fader::new(master, meter, move |v| Message::Master(mix, v)))
-                    .center_x(Length::Fill)
-                    .height(Length::Fill)
-                    .padding([4, 0]),
+                container(
+                    Fader::new(master, meter, move |v| Message::Master(mix, v))
+                        .accent(p::MONITORING),
+                )
+                .center_x(Length::Fill)
+                .height(Length::Fill)
+                .padding([4, 0]),
             )
             .push(
                 container(caption(&db_text(master), 10.0, p::MUTED))

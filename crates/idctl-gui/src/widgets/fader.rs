@@ -1,5 +1,5 @@
 //! Channel fader with its level meter, drawn on a canvas: a meter capsule
-//! with a dBFS scale, then a fader slot with its gain scale and a white cap.
+//! with a dBFS scale, then a fader slot with its gain scale and a flat cap.
 //! Relative drag, wheel, double-click to 0 dB.
 
 use std::time::{Duration, Instant};
@@ -39,7 +39,7 @@ const METER_MARKS: [f32; 11] = [
 const METER_FLOOR: f32 = -60.0;
 
 const DOUBLE_CLICK: Duration = Duration::from_millis(350);
-const CAP: Size = Size::new(22.0, 38.0);
+const CAP: Size = Size::new(30.0, 20.0);
 const PAD_TOP: f32 = 18.0;
 const PAD_BOTTOM: f32 = 22.0;
 
@@ -47,6 +47,7 @@ pub struct Fader<'a, Message> {
     value: f32,
     /// Up to two meter channels, in dBFS (`None` = silence).
     meter: Vec<Option<f32>>,
+    accent: Color,
     on_change: Box<dyn Fn(f32) -> Message + 'a>,
 }
 
@@ -59,8 +60,15 @@ impl<'a, Message> Fader<'a, Message> {
         Self {
             value,
             meter,
+            accent: p::SELECTOR,
             on_change: Box::new(on_change),
         }
+    }
+
+    /// The colour of the line across the cap.
+    pub fn accent(mut self, colour: Color) -> Self {
+        self.accent = colour;
+        self
     }
 }
 
@@ -197,14 +205,12 @@ impl<Message> canvas::Program<Message> for Fader<'_, Message> {
         // Meter capsule.
         let well = Rectangle::new(Point::new(2.0, 2.0), Size::new(38.0, bounds.height - 4.0));
         frame.fill(
-            &Path::rounded_rectangle(well.position(), well.size(), 14.0.into()),
-            Color::from_rgb8(0x18, 0x19, 0x1b),
+            &Path::rounded_rectangle(well.position(), well.size(), 8.0.into()),
+            p::CHROME,
         );
         frame.stroke(
-            &Path::rounded_rectangle(well.position(), well.size(), 14.0.into()),
-            Stroke::default()
-                .with_color(Color::from_rgba(1.0, 1.0, 1.0, 0.06))
-                .with_width(1.0),
+            &Path::rounded_rectangle(well.position(), well.size(), 8.0.into()),
+            Stroke::default().with_color(p::STRIP_LINE).with_width(1.0),
         );
         // Clip lamp at the top of the capsule.
         let clipped = self.meter.iter().any(|m| m.is_some_and(|db| db >= -0.1));
@@ -213,7 +219,7 @@ impl<Message> canvas::Program<Message> for Fader<'_, Message> {
             if clipped {
                 p::METER_HIGH
             } else {
-                Color::from_rgb8(0x0c, 0x0c, 0x0d)
+                p::STRIP_LINE
             },
         );
 
@@ -223,11 +229,7 @@ impl<Message> canvas::Program<Message> for Fader<'_, Message> {
         for (i, level) in self.meter.iter().enumerate() {
             let x = bars_x + i as f32 * (bar_w + 2.0);
             let slot = Rectangle::new(Point::new(x, y_at(0.0)), Size::new(bar_w, travel));
-            frame.fill_rectangle(
-                slot.position(),
-                slot.size(),
-                Color::from_rgb8(0x0d, 0x0d, 0x0e),
-            );
+            frame.fill_rectangle(slot.position(), slot.size(), p::STRIP);
             let f = meter_fraction(*level);
             let h = f * travel;
             let segments = (h / 2.0).ceil() as usize;
@@ -263,7 +265,7 @@ impl<Message> canvas::Program<Message> for Fader<'_, Message> {
         frame.fill_rectangle(
             Point::new(slot_x - 2.0, y_at(0.0)),
             Size::new(4.0, travel),
-            Color::from_rgb8(0x14, 0x15, 0x16),
+            p::STRIP_LINE,
         );
         let gain_labels = GAIN
             .0
@@ -285,32 +287,18 @@ impl<Message> canvas::Program<Message> for Fader<'_, Message> {
             Point::new(slot_x - CAP.width / 2.0, y - CAP.height / 2.0),
             CAP,
         );
-        frame.fill(
-            &Path::rounded_rectangle(Point::new(cap.x, cap.y + 2.0), cap.size(), 3.0.into()),
-            Color::from_rgba(0.0, 0.0, 0.0, 0.4),
+        let shape = Path::rounded_rectangle(cap.position(), cap.size(), 4.0.into());
+        frame.fill(&shape, p::BUTTON_TOP);
+        frame.stroke(
+            &shape,
+            Stroke::default()
+                .with_color(Color::from_rgb8(0x3a, 0x4a, 0x60))
+                .with_width(1.0),
         );
-        let body = canvas::gradient::Linear::new(
-            Point::new(cap.x, cap.y),
-            Point::new(cap.x, cap.y + cap.height),
-        )
-        .add_stop(0.0, Color::from_rgb8(0xf4, 0xf4, 0xf4))
-        .add_stop(0.5, Color::from_rgb8(0xc9, 0xc9, 0xc9))
-        .add_stop(1.0, Color::from_rgb8(0xee, 0xee, 0xee));
-        frame.fill(
-            &Path::rounded_rectangle(cap.position(), cap.size(), 3.0.into()),
-            body,
-        );
-        for k in [-6.0, -3.0, 3.0, 6.0] {
-            frame.fill_rectangle(
-                Point::new(cap.x + 3.0, y + k),
-                Size::new(cap.width - 6.0, 1.0),
-                Color::from_rgba(0.0, 0.0, 0.0, 0.25),
-            );
-        }
         frame.fill_rectangle(
-            Point::new(cap.x + 2.0, y - 0.75),
-            Size::new(cap.width - 4.0, 1.5),
-            Color::from_rgb8(0x20, 0x20, 0x20),
+            Point::new(cap.x + 5.0, y - 1.0),
+            Size::new(cap.width - 10.0, 2.0),
+            self.accent,
         );
 
         vec![frame.into_geometry()]

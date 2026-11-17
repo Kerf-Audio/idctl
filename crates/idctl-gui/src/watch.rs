@@ -41,8 +41,8 @@ pub fn all() -> Vec<(ParamAddr, u16)> {
             (input::phantom(ch), 1),
             (input::pad(ch), 1),
             (input::hpf(ch), 1),
-            (input::hmx(ch), 1),
-            (input::lift(ch), 1),
+            (input::tone_a(ch), 1),
+            (input::tone_b(ch), 1),
         ]);
     }
     for node in 0..NODES as u8 {

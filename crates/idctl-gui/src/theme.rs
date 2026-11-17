@@ -7,32 +7,32 @@ use iced::{
 
 pub mod palette {
     use iced::{color, Color};
-    pub const WINDOW: Color = color!(0x2b2e32);
-    pub const CHROME: Color = color!(0x1f2124);
-    pub const STRIP: Color = color!(0x2e3135);
-    pub const STRIP_LINE: Color = color!(0x24272a);
-    pub const SECTION: Color = color!(0x26292c);
-    pub const BUTTON_TOP: Color = color!(0x3a3d41);
-    pub const BUTTON_BOTTOM: Color = color!(0x2b2e31);
-    pub const LIT_TOP: Color = color!(0xffffff);
-    pub const TEXT: Color = color!(0xe8e8e8);
-    pub const DARK_TEXT: Color = color!(0x1c1e21);
-    pub const MUTED: Color = color!(0x8e9196);
-    pub const FAINT: Color = color!(0x5d6065);
-    pub const MIC: Color = color!(0xff8fc9);
-    pub const OPTICAL: Color = color!(0xff9d6a);
-    pub const COMPUTER: Color = color!(0x3aa0ff);
-    pub const REVERB: Color = color!(0xf4f4f1);
-    pub const ARC_START: Color = color!(0x3aa0ff);
-    pub const ARC_END: Color = color!(0x7cc4ff);
-    pub const MONITORING: Color = color!(0x1fb28a);
-    pub const CLOCK: Color = color!(0x1fb28a);
-    pub const SELECTOR: Color = color!(0x3aa0ff);
-    pub const METER_LOW: Color = color!(0x1fb28a);
-    pub const METER_MID: Color = color!(0xff9d6a);
-    pub const METER_HIGH: Color = color!(0xff4f6a);
-    pub const MUTE_ON: Color = color!(0xff4f6a);
-    pub const SOLO_ON: Color = color!(0xff9d6a);
+    pub const WINDOW: Color = color!(0x0e1319);
+    pub const CHROME: Color = color!(0x0a0e13);
+    pub const STRIP: Color = color!(0x151c25);
+    pub const STRIP_LINE: Color = color!(0x263241);
+    pub const SECTION: Color = color!(0x1b2430);
+    pub const BUTTON_TOP: Color = color!(0x222d3b);
+    pub const BUTTON_BOTTOM: Color = color!(0x1b2430);
+    pub const LIT_TOP: Color = color!(0xf5b942);
+    pub const TEXT: Color = color!(0xe6ebf2);
+    pub const DARK_TEXT: Color = color!(0x10141a);
+    pub const MUTED: Color = color!(0x8a97a8);
+    pub const FAINT: Color = color!(0x56627a);
+    pub const MIC: Color = color!(0xb79cff);
+    pub const OPTICAL: Color = color!(0xf5b942);
+    pub const COMPUTER: Color = color!(0x36d6e7);
+    pub const REVERB: Color = color!(0xe6ebf2);
+    pub const ARC_START: Color = color!(0x36d6e7);
+    pub const ARC_END: Color = color!(0xb79cff);
+    pub const MONITORING: Color = color!(0x9be564);
+    pub const CLOCK: Color = color!(0x9be564);
+    pub const SELECTOR: Color = color!(0x36d6e7);
+    pub const METER_LOW: Color = color!(0x9be564);
+    pub const METER_MID: Color = color!(0xf5b942);
+    pub const METER_HIGH: Color = color!(0xff6b57);
+    pub const MUTE_ON: Color = color!(0xff6b57);
+    pub const SOLO_ON: Color = color!(0xf5b942);
 }
 use palette as p;
 
@@ -47,7 +47,7 @@ pub const SEMIBOLD: Font = Font {
 
 pub fn theme() -> Theme {
     Theme::custom(
-        "iD".to_string(),
+        "Mixer".to_string(),
         iced::theme::Palette {
             background: p::WINDOW,
             text: p::TEXT,
@@ -92,7 +92,7 @@ fn lighten(c: Color, by: f32) -> Color {
     )
 }
 
-/// Hardware-style key. `lit` keys glow in `accent` (white for selectors).
+/// Hardware-style key. `lit` keys fill with `accent` (amber for selectors).
 pub fn key(lit: bool, accent: Color) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |_, status| {
         let hover = if matches!(status, button::Status::Hovered) {
@@ -274,10 +274,10 @@ pub fn menu(_: &Theme) -> iced::overlay::menu::Style {
     }
 }
 
-/// Inset selector frame (ORBIT).
+/// Inset selector frame (input mode).
 pub fn well(_: &Theme) -> container::Style {
     container::Style {
-        background: Some(Color::from_rgb8(0x1d, 0x1f, 0x22).into()),
+        background: Some(Color::from_rgb8(0x0a, 0x0e, 0x13).into()),
         border: border::rounded(6)
             .color(Color::from_rgba(1.0, 1.0, 1.0, 0.12))
             .width(1),

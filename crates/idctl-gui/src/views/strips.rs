@@ -73,10 +73,12 @@ fn pair_view(app: &App, pair: usize, rack: f32) -> Element<'_, Message> {
             .into()),
         link,
         both(&|n| mute_solo(m, mix, n)),
-        row(nodes.map(|n| container(fader(m, mix, n))
-            .center_x(layout::STRIP)
-            .height(Length::Fill)
-            .into())),
+        row(nodes.map(
+            |n| container(fader(m, mix, n, group_colour(channel(n).group)))
+                .center_x(layout::STRIP)
+                .height(Length::Fill)
+                .into()
+        )),
     ];
     let sections: Element<'_, Message> = if pair == REVERB_PAIR {
         cards::reverb_return(m, mix)
@@ -185,12 +187,15 @@ fn mute_solo(m: &Model, mix: usize, node: usize) -> Element<'static, Message> {
     .into()
 }
 
-fn fader(m: &Model, mix: usize, node: usize) -> Element<'static, Message> {
+fn fader(m: &Model, mix: usize, node: usize, accent: Color) -> Element<'static, Message> {
     let level = m.mixer.send(node, mix).level;
     Column::new()
-        .push(Fader::new(level, vec![m.source_level(node)], move |v| {
-            Message::Level(node, v)
-        }))
+        .push(
+            Fader::new(level, vec![m.source_level(node)], move |v| {
+                Message::Level(node, v)
+            })
+            .accent(accent),
+        )
         .push(
             container(caption(&db_text(level), 10.0, p::MUTED))
                 .center_x(Length::Fill)

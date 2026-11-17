@@ -23,8 +23,8 @@ const DSP_MAX_RATE: u32 = 96_000;
 const SEND_FLOOR_DB: f32 = -60.0;
 const SEND_MAX_DB: f32 = 6.0;
 
-/// ORBIT impedance settings in the order the arrows step through.
-const ORBIT: [(u8, &str); 3] = [(0, "Punch"), (1, "Smooth"), (3, "Vintage")];
+/// Input modes in the order the arrows step through, with the value each sends.
+const MODES: [(u8, &str); 3] = [(0, "Mode 1"), (1, "Mode 2"), (3, "Mode 3")];
 
 /// Sample rate the DSP coefficients are drawn at.
 pub fn dsp_rate(m: &Model) -> f32 {
@@ -168,14 +168,14 @@ fn phase_card(app: &App, ch: u8) -> Element<'_, Message> {
     .readout(format!("{:.0}\u{00b0}", d.phase_deg))
     .labels("0", "180", "");
     card(
-        "V-Phase",
+        "Phase",
         Some((d.phase_on, Message::Dsp(ch, DspEdit::PhaseOn(!d.phase_on)))),
         None,
         body,
     )
 }
 
-/// A tone key: bold upper-case label, white when lit.
+/// A tone key: bold upper-case label, lit in the highlight colour.
 fn tone_key<'a>(label: &str, on: bool, msg: Message) -> button::Button<'a, Message> {
     button(
         container(text(label.to_uppercase()).size(12).font(BOLD).color(if on {
@@ -196,11 +196,11 @@ fn tone_card(m: &Model, ch: u8) -> Element<'_, Message> {
         let on = m.flag(addr);
         tone_key(label, on, Message::Flag(addr, !on))
     };
-    let glow = m.flag(input::hmx(ch)) && m.flag(input::lift(ch));
-    let orbit = m.byte(input::character(ch));
-    let at = ORBIT.iter().position(|&(v, _)| v == orbit).unwrap_or(0);
+    let warm = m.flag(input::tone_a(ch)) && m.flag(input::tone_b(ch));
+    let mode = m.byte(input::character(ch));
+    let at = MODES.iter().position(|&(v, _)| v == mode).unwrap_or(0);
     let step =
-        |delta: usize| Message::Byte(input::character(ch), ORBIT[(at + delta) % ORBIT.len()].0);
+        |delta: usize| Message::Byte(input::character(ch), MODES[(at + delta) % MODES.len()].0);
     let arrow = |glyph: &str, msg| {
         button(text(glyph.to_string()).size(9).color(p::SELECTOR))
             .padding([4, 3])
@@ -209,9 +209,9 @@ fn tone_card(m: &Model, ch: u8) -> Element<'_, Message> {
     };
     let selector = container(
         row![
-            arrow("\u{25c0}", step(ORBIT.len() - 1)),
+            arrow("\u{25c0}", step(MODES.len() - 1)),
             container(
-                text(ORBIT[at].1.to_uppercase())
+                text(MODES[at].1.to_uppercase())
                     .size(11)
                     .font(BOLD)
                     .color(p::SELECTOR)
@@ -225,13 +225,13 @@ fn tone_card(m: &Model, ch: u8) -> Element<'_, Message> {
     .padding(1)
     .style(theme::well);
     let body = column![
-        tone_key("Glow", glow, Message::Glow(ch, !glow)),
+        tone_key("Warm", warm, Message::Warm(ch, !warm)),
         row![
-            toggle("HMX", input::hmx(ch)),
-            toggle("Lift", input::lift(ch))
+            toggle("Tone A", input::tone_a(ch)),
+            toggle("Tone B", input::tone_b(ch))
         ]
         .spacing(6),
-        caption("Orbit", 10.0, p::TEXT),
+        caption("Input mode", 10.0, p::TEXT),
         selector,
     ]
     .spacing(5)

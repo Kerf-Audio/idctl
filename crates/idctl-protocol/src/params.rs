@@ -17,7 +17,7 @@ pub mod kind {
     pub const DSP: u8 = 7;
     pub const REVERB: u8 = 9;
     pub const DIGITAL_OUT: u8 = 10;
-    pub const SMARTGAIN: u8 = 11;
+    pub const AUTO_GAIN: u8 = 11;
 }
 
 /// iD2+ has two analogue inputs (channels 0 and 1).
@@ -75,11 +75,11 @@ pub mod input {
     pub const fn mute(ch: u8) -> ParamAddr {
         at(ch, 1)
     }
-    /// `u8` HMX harmonic saturation. GLOW is HMX and LIFT together.
-    pub const fn hmx(ch: u8) -> ParamAddr {
+    /// `u8` first tone switch (harmonic saturation). The Warm key sets both tone switches.
+    pub const fn tone_a(ch: u8) -> ParamAddr {
         at(ch, 3)
     }
-    /// `u8` ORBIT impedance character: 0 punch, 1 smooth, 3 vintage.
+    /// `u8` input mode: 0, 1 or 3.
     pub const fn character(ch: u8) -> ParamAddr {
         at(ch, 4)
     }
@@ -91,8 +91,8 @@ pub mod input {
     pub const fn pad(ch: u8) -> ParamAddr {
         at(ch, 6)
     }
-    /// `u8` LIFT high-frequency sheen.
-    pub const fn lift(ch: u8) -> ParamAddr {
+    /// `u8` second tone switch (high-frequency sheen).
+    pub const fn tone_b(ch: u8) -> ParamAddr {
         at(ch, 0x0a)
     }
     /// `u8` high-pass filter on/off.
@@ -177,7 +177,7 @@ pub mod mixer {
     }
 }
 
-/// Comfort Reverb (`inst` 0).
+/// Reverb (`inst` 0).
 pub mod reverb {
     use super::*;
     /// `u16` normalised 0..=1, short to long.
@@ -188,11 +188,11 @@ pub mod reverb {
     pub const BLEND: ParamAddr = ParamAddr::new(kind::REVERB, 0, 4);
 }
 
-/// SmartGain (global, `inst` 0).
-pub mod smartgain {
+/// Auto gain (global, `inst` 0).
+pub mod auto_gain {
     use super::*;
     const fn at(param: u8) -> ParamAddr {
-        ParamAddr::new(kind::SMARTGAIN, 0, param)
+        ParamAddr::new(kind::AUTO_GAIN, 0, param)
     }
     /// `u8`: 0 stopped, 1 running, 2 success, 3 failed, 4 open, 5 closed.
     pub const STATUS: ParamAddr = at(0);

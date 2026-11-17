@@ -25,15 +25,15 @@ Audient. Audient and iD are trademarks of Audient Ltd.
 - **Monitor:** volume, mute, dim, reference level, mono, M/S, talkback,
   input source and headphone level.
 - **Preamps:** gain, +48V, pad, high-pass filter with adjustable cutoff.
-- **Tone:** GLOW, HMX, LIFT and ORBIT (Punch, Smooth, Vintage), and
-  V-PHASE on the mic inputs.
+- **Tone:** a Warm key, two tone switches (Tone A and B) and three input
+  modes, and Phase on the mic inputs.
 - **Channel DSP:** a four-band EQ (low shelf, two peaks, high shelf) with a
   draggable graph, and a compressor with threshold, ratio, attack, release,
   makeup and a gain-reduction meter. Swap the EQ/compressor order per
   channel. The DSP runs at sample rates up to 96 kHz.
 - **Mixer:** 26 channels (2 mic, 8 optical, 14 DAW, reverb return) into
   Main, Mix A and Mix B, with level, pan, mute, solo, stereo link and meters.
-- **Comfort Reverb:** a send on each channel, plus decay, damping and blend
+- **Reverb:** a send on each channel, plus decay, damping and blend
   on the return strip.
 - **Routing:** choose the source for each output pair.
 - **Settings:** sample rate (through PipeWire), headphone level and source,
@@ -149,7 +149,7 @@ window says when the iD2+ is connected.
 - Tested only on an iD2+ (USB `2708:0016`), on one machine: Arch Linux,
   Hyprland, PipeWire 1.6. Other setups may behave differently. Please open an
   issue and say what you have.
-- Not implemented yet: polarity, Record FX, SmartGain and clock source. The
+- Not implemented yet: polarity, record effects, auto gain and clock source. The
   FN button on the interface is not assigned to anything.
 - The sample rate is changed through PipeWire only.
 - The EQ and compressor run up to 96 kHz, not at 176.4 or 192 kHz.

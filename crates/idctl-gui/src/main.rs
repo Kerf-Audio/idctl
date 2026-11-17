@@ -48,8 +48,8 @@ pub enum Message {
     SampleRateSet(Result<(), String>),
     /// Mixer node of the talkback mic, or none.
     TalkbackSource(Option<usize>),
-    /// GLOW: HMX and LIFT together on one preamp channel.
-    Glow(u8, bool),
+    /// Both tone switches together on one preamp channel.
+    Warm(u8, bool),
     Level(usize, f32),
     Pan(usize, f32),
     Mute(usize),
@@ -318,9 +318,9 @@ fn update(app: &mut App, msg: Message) -> Task<Message> {
         Message::Db(a, v) => app.write(a, db(v)),
         Message::Unit(a, v) => app.write(a, codec::encode_unit(v).to_vec()),
         Message::Hz(a, hz) => app.write(a, (hz.round() as u16).to_le_bytes().to_vec()),
-        Message::Glow(ch, on) => {
-            app.write(input::hmx(ch), vec![u8::from(on)]);
-            app.write(input::lift(ch), vec![u8::from(on)]);
+        Message::Warm(ch, on) => {
+            app.write(input::tone_a(ch), vec![u8::from(on)]);
+            app.write(input::tone_b(ch), vec![u8::from(on)]);
         }
         Message::Master(m, v) => {
             app.write(mixer::master(2 * m as u8), db(v));
