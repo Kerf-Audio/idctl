@@ -24,6 +24,25 @@ impl Default for Talkback {
 }
 
 impl Talkback {
+    /// A hand edit of the talkback mic's cue send while talking becomes what
+    /// is restored afterwards, instead of being overwritten.
+    pub fn adopt(&mut self, node: usize, mix: usize, edit: &Edit) {
+        let Some((held, saved)) = &mut self.held else {
+            return;
+        };
+        let Some(i) = CUE_MIXES.iter().position(|&m| m == mix) else {
+            return;
+        };
+        if *held != node {
+            return;
+        }
+        match edit {
+            Edit::Level(db) => saved[i].level = *db,
+            Edit::Mute => saved[i].mute = !saved[i].mute,
+            Edit::Pan(_) | Edit::Solo => {}
+        }
+    }
+
     /// Follow the TB state; returns the gains to write when it changes.
     pub fn follow(&mut self, mixer: &mut Mixer, on: bool) -> Writes {
         let mut out = Writes::new();
@@ -71,5 +90,17 @@ mod tests {
         tb.follow(&mut mixer, false);
         assert_eq!(mixer.send(0, 1).level, -20.0);
         assert!(mixer.send(0, 2).mute);
+    }
+
+    #[test]
+    fn edits_made_while_talking_survive_the_release() {
+        let mut mixer = Mixer::default();
+        mixer.edit(0, 1, Edit::Level(-20.0));
+        let mut tb = Talkback::default();
+        tb.follow(&mut mixer, true);
+        tb.adopt(0, 1, &Edit::Level(-9.0));
+        tb.adopt(0, 0, &Edit::Level(-1.0));
+        tb.follow(&mut mixer, false);
+        assert_eq!(mixer.send(0, 1).level, -9.0);
     }
 }

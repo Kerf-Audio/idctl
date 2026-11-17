@@ -202,6 +202,7 @@ impl App {
     }
 
     fn mixer_edit_in(&mut self, node: usize, mix: usize, edit: Edit) {
+        self.talkback.adopt(node, mix, &edit);
         let writes = self.model.mixer.edit(node, mix, edit);
         self.write_all(writes);
     }
