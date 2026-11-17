@@ -2,8 +2,8 @@
 
 # D+ Control
 
-A free, open-source control app for the Audient iD2+ audio interface on
-Linux. It gives you the monitor controller, preamps, tone, the mixer and
+A free, open-source Linux control app for USB audio interfaces. It
+currently supports the Audient iD2+. It gives you the monitor controller, preamps, tone, the mixer and
 reverb, and a Latency page that helps you get clean, low-latency audio out
 of the interface under PipeWire.
 
@@ -11,8 +11,8 @@ of the interface under PipeWire.
 
 ## Why this exists
 
-Audient does not make control software for Linux. The iD2+ works as a
-class-compliant USB audio device, but without their app there is no way to
+Audient's own control software is not available for Linux. The iD2+ works
+as a class-compliant USB audio device, but without it there is no way to
 reach the mixer, the preamp switches or the routing. I built this so that I
 could use my own interface, and I am sharing it for anyone else in the same
 position. It is free, open source (MIT) and comes with no warranty.
@@ -132,7 +132,7 @@ The install goes under `~/.local` (set `PREFIX` to change that). Make sure
 Without this rule only root can talk to the interface:
 
 ```sh
-sudo cp packaging/70-id2plus.rules /etc/udev/rules.d/
+sudo cp packaging/70-dplus-control.rules /etc/udev/rules.d/
 sudo udevadm control --reload
 sudo udevadm trigger
 ```
@@ -142,7 +142,7 @@ Replug the interface after installing the rule.
 ### Run it
 
 Start **D+ Control** from your app list, or run `idctl-gui`. The corner of the
-window says when the iD2+ is connected.
+window says when the interface is connected.
 
 ## Known issues
 

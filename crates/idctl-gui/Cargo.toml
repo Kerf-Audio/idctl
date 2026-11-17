@@ -1,6 +1,6 @@
 [package]
 name = "idctl-gui"
-description = "D+ Control: Linux control panel for the iD2+"
+description = "D+ Control: Linux control panel for a USB audio interface"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

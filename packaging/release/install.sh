@@ -21,7 +21,7 @@ update-desktop-database "$prefix/share/applications" 2>/dev/null || true
 echo "Installed D+ Control to $prefix"
 
 if [ "${1:-}" = "--udev" ]; then
-    sudo install -Dm644 "$here/70-id2plus.rules" /etc/udev/rules.d/70-id2plus.rules
+    sudo install -Dm644 "$here/70-dplus-control.rules" /etc/udev/rules.d/70-dplus-control.rules
     sudo udevadm control --reload
     sudo udevadm trigger
     echo "Installed the device rule. Replug the interface."

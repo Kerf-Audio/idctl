@@ -4,7 +4,7 @@ use idctl_protocol::params::output;
 use idctl_protocol::ParamAddr;
 
 /// Source columns shared by every page, left to right.
-pub const HEADERS: [&str; 5] = ["Main", "Alt", "Mix A", "Mix B", "Virtual thru"];
+pub const HEADERS: [&str; 5] = ["Main", "Alt", "Mix A", "Mix B", "Pass-through"];
 
 /// Columns under the MONITORING pill.
 pub const MONITORING: std::ops::Range<usize> = 0..2;
@@ -191,7 +191,7 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<(ParamAddr, Vec<u8>)> {
 
 fn virtual_outs(thru: u8) -> String {
     let n = thru - VIRTUAL_FIRST + 1;
-    format!("Virtual outs {n} + {}", n + 1)
+    format!("Computer outs {n} + {}", n + 1)
 }
 
 /// A stereo output with every source column.
@@ -215,7 +215,7 @@ fn digital(pair: usize, mono: bool) -> Vec<Row> {
         (0..2)
             .map(|side| Row {
                 name: format!("Digital {}", n + side),
-                destination: format!("Virtual out {}", thru - VIRTUAL_FIRST + 1 + side),
+                destination: format!("Computer out {}", thru - VIRTUAL_FIRST + 1 + side),
                 slot: first + side,
                 stereo: false,
                 toggle: (side == 0).then_some(pair),
@@ -328,17 +328,17 @@ mod tests {
         assert_eq!(mono[0].toggle, Some(0));
         assert_eq!(mono[1].toggle, None);
         assert!(!mono[1].stereo);
-        assert_eq!(mono[1].destination, "Virtual out 8");
+        assert_eq!(mono[1].destination, "Computer out 8");
     }
 
     #[test]
     fn destinations() {
         let digital = rows(Page::Digital, &[false; 4]);
-        assert_eq!(digital[0].destination, "Virtual outs 7 + 8");
-        assert_eq!(digital[3].destination, "Virtual outs 13 + 14");
+        assert_eq!(digital[0].destination, "Computer outs 7 + 8");
+        assert_eq!(digital[3].destination, "Computer outs 13 + 14");
         let analogue = rows(Page::Analogue, &[false; 4]);
-        assert_eq!(analogue[0].destination, "Virtual outs 1 + 2");
-        assert_eq!(analogue[2].destination, "Virtual outs 5 + 6");
+        assert_eq!(analogue[0].destination, "Computer outs 1 + 2");
+        assert_eq!(analogue[2].destination, "Computer outs 5 + 6");
     }
 
     #[test]

@@ -116,7 +116,7 @@ pub fn root(app: &App) -> Element<'_, Message> {
 
 fn top_bar(app: &App) -> Element<'_, Message> {
     let status = match &app.offline {
-        None => caption("iD2+ connected", 11.0, p::CLOCK),
+        None => caption("Interface connected", 11.0, p::CLOCK),
         Some(why) => caption(&format!("offline: {why}"), 11.0, p::MUTE_ON),
     };
     container(

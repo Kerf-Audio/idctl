@@ -2,10 +2,10 @@
 Type=Application
 Name=D+ Control
 GenericName=Audio Interface Control
-Comment=Control panel for the iD2+ audio interface
+Comment=Control panel for a USB audio interface
 Exec=idctl-gui
 Icon=dplus-control
 Terminal=false
 Categories=AudioVideo;Audio;Mixer;
-Keywords=audient;id2;mixer;audio;interface;
+Keywords=mixer;audio;interface;usb;control;
 StartupWMClass=dplus-control

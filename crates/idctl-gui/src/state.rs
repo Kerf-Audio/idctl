@@ -28,8 +28,8 @@ fn migrate(base: &Path) {
 mod tests {
     use super::*;
 
-    fn scratch() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("dplus-state-test-{}", std::process::id()));
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("dplus-state-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -37,7 +37,7 @@ mod tests {
 
     #[test]
     fn an_earlier_folder_is_moved_to_the_new_name() {
-        let base = scratch();
+        let base = scratch("moved");
         std::fs::create_dir_all(base.join(OLD_DIR)).unwrap();
         std::fs::write(base.join(OLD_DIR).join("latency"), "quantum=64\n").unwrap();
         migrate(&base);
@@ -51,7 +51,7 @@ mod tests {
 
     #[test]
     fn a_new_folder_is_never_overwritten() {
-        let base = scratch();
+        let base = scratch("kept");
         std::fs::create_dir_all(base.join(OLD_DIR)).unwrap();
         std::fs::create_dir_all(base.join(DIR)).unwrap();
         std::fs::write(base.join(DIR).join("latency"), "new").unwrap();

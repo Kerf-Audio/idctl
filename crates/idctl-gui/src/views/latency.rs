@@ -369,7 +369,7 @@ fn sources<'a>(state: &'a State, s: Option<&'a Snapshot>) -> Element<'a, Message
 
 fn idle_reason(state: &State) -> String {
     if state.interface.is_none() {
-        return "PipeWire does not list an iD2+. Check that it is plugged in.".into();
+        return "PipeWire does not list the interface. Check that it is plugged in.".into();
     }
     match state.snapshot.as_ref().map(|s| &s.driving) {
         None => "Listening to PipeWire.".into(),

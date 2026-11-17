@@ -15,7 +15,7 @@ update-desktop-database "$prefix/share/applications" 2>/dev/null || true
 echo "Removed D+ Control from $prefix"
 
 if [ "${1:-}" = "--udev" ]; then
-    sudo rm -f /etc/udev/rules.d/70-id2plus.rules
+    sudo rm -f /etc/udev/rules.d/70-dplus-control.rules
     sudo udevadm control --reload
     echo "Removed the device rule."
 fi

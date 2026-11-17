@@ -116,7 +116,7 @@ fn header(node: usize) -> Element<'static, Message> {
                 .size(26)
                 .font(BOLD)
                 .color(p::TEXT),
-            caption(&format!("iD2+ \u{00b7} {}", ch.source), 10.0, colour),
+            caption(&ch.source, 10.0, colour),
             space().height(4),
             caption(&ch.name, 12.0, p::TEXT),
         ]

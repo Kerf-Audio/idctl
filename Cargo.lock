@@ -1344,7 +1344,7 @@ dependencies = [
 
 [[package]]
 name = "idctl-audio"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1353,7 +1353,7 @@ dependencies = [
 
 [[package]]
 name = "idctl-gui"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "iced",
  "idctl-audio",
@@ -1364,11 +1364,11 @@ dependencies = [
 
 [[package]]
 name = "idctl-protocol"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "idctl-usb"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "idctl-protocol",
  "rusb",
