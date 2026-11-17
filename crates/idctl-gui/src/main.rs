@@ -1,6 +1,7 @@
 //! iD Mixer: Linux control panel for the iD2+ audio interface.
 
 mod channel_dsp;
+mod latency;
 mod mix;
 mod model;
 mod routing;
@@ -12,7 +13,7 @@ mod widgets;
 mod worker;
 
 use std::sync::mpsc::{Receiver, Sender};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use iced::{Element, Size, Subscription, Task};
 
@@ -67,6 +68,7 @@ pub enum Message {
     Open(Editor),
     Close,
     Routing(routing::Msg),
+    Latency(latency::Msg),
     /// Drag of the monitoring bar: grab, new rack height, release.
     RackGrab,
     RackDrag(f32),
@@ -89,6 +91,7 @@ impl Message {
                 | Self::SelectMix(_)
                 | Self::SampleRate(_)
                 | Self::SampleRateSet(_)
+                | Self::Latency(_)
                 | Self::Open(_)
                 | Self::Close
                 | Self::Routing(routing::Msg::Page(_))
@@ -107,6 +110,7 @@ pub enum Tab {
     Mixer,
     Routing,
     Settings,
+    Latency,
 }
 
 /// Full-size processor editors.
@@ -140,6 +144,7 @@ pub struct App {
     confirm_phantom: Option<u8>,
     /// PipeWire's graph rate is forced by us.
     rate_forced: bool,
+    latency: latency::State,
 }
 
 impl App {
@@ -161,6 +166,7 @@ impl App {
             resizing_rack: false,
             confirm_phantom: None,
             rate_forced: false,
+            latency: latency::State::default(),
         }
     }
 
@@ -266,7 +272,13 @@ fn update(app: &mut App, msg: Message) -> Task<Message> {
     let db = |v: f32| codec::encode_db(v).to_vec();
     match msg {
         Message::Tick => app.drain_events(),
-        Message::Tab(t) => app.tab = t,
+        Message::Tab(t) => {
+            app.tab = t;
+            if t == Tab::Latency {
+                return latency_update(app, latency::Msg::Opened);
+            }
+        }
+        Message::Latency(m) => return latency_update(app, m),
         Message::SelectMix(m) => app.mix = m,
         Message::Flag(a, on) => {
             app.write(a, vec![u8::from(on)]);
@@ -389,14 +401,28 @@ fn update(app: &mut App, msg: Message) -> Task<Message> {
     Task::none()
 }
 
+fn latency_update(app: &mut App, msg: latency::Msg) -> Task<Message> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    app.latency.update(msg, now).map(Message::Latency)
+}
+
 fn view(app: &App) -> Element<'_, Message> {
     views::root(app)
 }
 
-fn subscription(_: &App) -> Subscription<Message> {
+fn subscription(app: &App) -> Subscription<Message> {
+    // pw-top runs only while its page is showing.
+    let latency = if app.tab == Tab::Latency {
+        latency::feed().map(|f| Message::Latency(latency::Msg::Feed(f)))
+    } else {
+        Subscription::none()
+    };
     Subscription::batch([
         iced::time::every(TICK).map(|_| Message::Tick),
         iced::window::close_requests().map(|_| Message::CloseRequested),
+        latency,
     ])
 }
 

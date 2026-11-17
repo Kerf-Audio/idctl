@@ -3,6 +3,7 @@
 mod cards;
 mod dialog;
 mod editor;
+mod latency;
 mod monitor;
 mod routing;
 mod settings;
@@ -62,12 +63,14 @@ pub fn root(app: &App) -> Element<'_, Message> {
         Tab::Mixer => strips::view(app),
         Tab::Routing => routing::view(&app.model, &app.routing),
         Tab::Settings => settings::view(app),
+        Tab::Latency => latency::view(&app.latency),
     };
     let mut content = row![container(body).width(Length::Fill).height(Length::Fill)];
-    if app.tab != Tab::Routing {
+    if !matches!(app.tab, Tab::Routing | Tab::Latency) {
         content = content.push(monitor::view(&app.model, app.mix));
     }
-    let content: Element<'_, Message> = if app.offline.is_some() {
+    // The Latency page talks to PipeWire, not to the device.
+    let content: Element<'_, Message> = if app.offline.is_some() && app.tab != Tab::Latency {
         // Nothing can be written without the device: dim the controls and
         // keep clicks from reaching them.
         stack![
@@ -172,6 +175,7 @@ fn sidebar(app: &App) -> Element<'_, Message> {
             tab("Mixer", Tab::Mixer),
             tab("Routing", Tab::Routing),
             tab("Settings", Tab::Settings),
+            tab("Latency", Tab::Latency),
             space::vertical(),
             column![
                 caption("Clock", 10.0, p::MUTED),
@@ -199,6 +203,14 @@ fn trim_khz(hz: u32) -> String {
     } else {
         format!("{khz:.1}")
     }
+}
+
+/// A titled panel on the Settings and Latency pages.
+fn card<'a>(title: &str, body: Element<'a, Message>) -> Element<'a, Message> {
+    container(column![caption(title, 12.0, p::TEXT), body].spacing(18))
+        .padding(20)
+        .style(theme::card)
+        .into()
 }
 
 /// A hardware-style key with a tracked caption.

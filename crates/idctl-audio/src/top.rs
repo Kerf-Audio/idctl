@@ -57,6 +57,10 @@ fn is_format(token: &str) -> bool {
 
 pub fn parse_row(header: &Header, line: &str) -> Option<Row> {
     let cols: Vec<&str> = line.split_whitespace().collect();
+    // `C`: pw-top has not heard from the node yet and prints zeroed counters.
+    if cols.first() == Some(&"C") {
+        return None;
+    }
     let mut rest = cols.get(header.errors + 1 + header.skip..)?;
     if let [format, channels, rate, ..] = rest {
         if is_format(format) && channels.parse::<u32>().is_ok() && rate.parse::<u32>().is_ok() {
@@ -177,6 +181,16 @@ mod tests {
     }
 
     #[test]
+    fn rows_still_being_created_are_skipped() {
+        // pw-top's first iteration shows every node as `C` with zeroed
+        // counters; taking those as a baseline would make old xruns look new.
+        assert!(row(
+            "C  150      0      0    ---     ---   ---   ---     0                  My DAW"
+        )
+        .is_none());
+    }
+
+    #[test]
     fn bad_rows_are_skipped() {
         assert!(row("").is_none());
         assert!(row("R   44     64  480").is_none());
@@ -193,16 +207,17 @@ mod tests {
         let mut frames = Frames::default();
         let done: Vec<Vec<Row>> = DRIVING.lines().filter_map(|l| frames.push(l)).collect();
         assert_eq!(done.len(), 3);
-        assert!(done.iter().all(|f| f.len() == 5));
+        assert!(done[0].is_empty());
+        assert!(done[1..].iter().all(|f| f.len() == 5));
         let daw = |f: &[Row]| f.iter().find(|r| r.name == "My DAW").unwrap().errors;
-        assert_eq!((daw(&done[0]), daw(&done[1]), daw(&done[2])), (0, 3, 5));
+        assert_eq!((daw(&done[1]), daw(&done[2])), (3, 5));
     }
 
     #[test]
     fn a_real_idle_capture_parses() {
         let mut frames = Frames::default();
         let done: Vec<Vec<Row>> = IDLE.lines().filter_map(|l| frames.push(l)).collect();
-        assert_eq!(done.len(), 1);
-        assert!(done[0].iter().any(|r| r.name.contains("iD2")));
+        assert_eq!(done.len(), 2);
+        assert!(done[1].iter().any(|r| r.name.contains("iD2")));
     }
 }

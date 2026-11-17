@@ -13,4 +13,4 @@ idctl-protocol = { path = "../idctl-protocol" }
 idctl-usb = { path = "../idctl-usb" }
 idctl-audio = { path = "../idctl-audio" }
 iced = { version = "0.14", features = ["tokio", "canvas"] }
-tokio = { version = "1", features = ["process"] }
+tokio = { version = "1", features = ["process", "time"] }

@@ -6,9 +6,9 @@ use iced::{Alignment, Element, Length};
 use idctl_protocol::params::{output, system};
 
 use super::monitor::VOLUME_TAPER;
-use super::{key, trim_khz};
+use super::{card, key, trim_khz};
 use crate::model::Model;
-use crate::theme::{self, caption, palette as p};
+use crate::theme::{caption, palette as p};
 use crate::watch::PHONES;
 use crate::widgets::Knob;
 use crate::{App, Message};
@@ -32,13 +32,6 @@ pub fn view(app: &App) -> Element<'_, Message> {
     .padding(28)
     .width(Length::Fill)
     .into()
-}
-
-fn card<'a>(title: &str, body: Element<'a, Message>) -> Element<'a, Message> {
-    container(column![caption(title, 12.0, p::TEXT), body].spacing(18))
-        .padding(20)
-        .style(theme::card)
-        .into()
 }
 
 fn clock(app: &App) -> Element<'_, Message> {
