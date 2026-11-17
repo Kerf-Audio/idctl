@@ -1,0 +1,11 @@
+[package]
+name = "idctl-audio"
+description = "PipeWire monitoring and buffer tuning for iD Mixer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]

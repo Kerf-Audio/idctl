@@ -1,0 +1,19 @@
+S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT           NAME
+C   44      0      0    ---     ---   ---   ---     0                  alsa_output.usb-Audient_iD2__00-00-0000-0000-00.pro-output-0
+C   46      0      0    ---     ---   ---   ---     0                  alsa_input.usb-Audient_iD2__00-00-0000-0000-00.pro-input-0
+C  150      0      0    ---     ---   ---   ---     0                  My DAW
+C  151      0      0    ---     ---   ---   ---     0                  Web Browser
+C  134      0      0    ---     ---   ---   ---     0                  alsa_output.pci-0000_66_00.1.hdmi-stereo
+S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT           NAME
+R   44     64  48000  41.2us  12.3us  0.03  0.18    0    S32LE 10 48000 alsa_output.usb-Audient_iD2__00-00-0000-0000-00.pro-output-0
+R   46     64  48000  10.0us   5.0us  0.01  0.02    0    S32LE 12 48000  + alsa_input.usb-Audient_iD2__00-00-0000-0000-00.pro-input-0
+R  150     64  48000 200.1us   1.4ms  0.15  1.04    3    F32LE 2 48000  = My DAW
+R  151     64  48000  20.0us  30.0us  0.02  0.02    0    F32LE 2 48000  = Web Browser
+S  134      0      0    ---     ---   ---   ---     0                  alsa_output.pci-0000_66_00.1.hdmi-stereo
+S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT           NAME
+R   44     64  48000  40.0us  12.0us  0.03  0.17    0    S32LE 10 48000 alsa_output.usb-Audient_iD2__00-00-0000-0000-00.pro-output-0
+R   46     64  48000  10.0us   5.0us  0.01  0.02    0    S32LE 12 48000  + alsa_input.usb-Audient_iD2__00-00-0000-0000-00.pro-input-0
+R  150     64  48000 210.0us   1.1ms  0.16  0.82    5    F32LE 2 48000  = My DAW
+R  151     64  48000  20.0us  30.0us  0.02  0.02    0    F32LE 2 48000  = Web Browser
+S  134      0      0    ---     ---   ---   ---     0                  alsa_output.pci-0000_66_00.1.hdmi-stereo
+S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT           NAME

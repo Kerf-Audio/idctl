@@ -1343,6 +1343,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "idctl-audio"
+version = "0.1.0"
+
+[[package]]
 name = "idctl-gui"
 version = "0.1.0"
 dependencies = [
