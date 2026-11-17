@@ -1,0 +1,85 @@
+[
+  {
+    "id": 49,
+    "type": "PipeWire:Interface:Device",
+    "info": {
+      "props": {
+        "device.name": "alsa_card.usb-Audient_iD2__00-00-0000-0000-00",
+        "device.product.id": "0x0016",
+        "device.vendor.id": "0x2708",
+        "media.class": "Audio/Device"
+      },
+      "params": {
+        "Profile": [
+          {
+            "index": 1,
+            "name": "output:multichannel-output"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 44,
+    "type": "PipeWire:Interface:Node",
+    "info": {
+      "props": {
+        "device.id": 49,
+        "media.class": "Audio/Sink",
+        "node.name": "alsa_output.usb-Audient_iD2__00-00-0000-0000-00.multichannel-output"
+      },
+      "params": {
+        "Props": [
+          {
+            "params": [
+              "api.alsa.period-size",
+              32,
+              "api.alsa.headroom",
+              32
+            ]
+          }
+        ]
+      },
+      "state": "suspended"
+    }
+  },
+  {
+    "id": 134,
+    "type": "PipeWire:Interface:Node",
+    "info": {
+      "props": {
+        "device.id": 132,
+        "media.class": "Audio/Sink",
+        "node.name": "alsa_output.pci-0000_66_00.1.hdmi-stereo"
+      },
+      "params": {
+        "Props": [
+          {
+            "params": [
+              "api.alsa.period-size",
+              0,
+              "api.alsa.headroom",
+              0
+            ]
+          }
+        ]
+      },
+      "state": "running"
+    }
+  },
+  {
+    "id": 142,
+    "type": "PipeWire:Interface:Node",
+    "info": {
+      "props": {
+        "application.name": "Quickshell Peak Detect",
+        "media.class": "Stream/Input/Audio",
+        "node.name": "quickshell"
+      },
+      "params": {
+        "Props": []
+      },
+      "state": "running"
+    }
+  }
+]
