@@ -1,7 +1,6 @@
 //! iD Mixer: Linux control panel for the iD2+ audio interface.
 
 mod channel_dsp;
-mod clock;
 mod mix;
 mod model;
 mod routing;
@@ -186,7 +185,7 @@ impl App {
         let written = self.tx.send(Command::Quit(ack_tx)).is_ok()
             && ack_rx.recv_timeout(Duration::from_secs(1)) == Ok(true);
         if self.rate_forced {
-            clock::release();
+            idctl_audio::pw::release_rate();
         }
         written
     }
@@ -306,7 +305,7 @@ fn update(app: &mut App, msg: Message) -> Task<Message> {
             }
         }
         Message::SampleRate(hz) => {
-            return Task::perform(clock::force(hz), Message::SampleRateSet);
+            return Task::perform(idctl_audio::pw::force_rate(hz), Message::SampleRateSet);
         }
         Message::SampleRateSet(result) => {
             app.rate_forced |= result.is_ok();

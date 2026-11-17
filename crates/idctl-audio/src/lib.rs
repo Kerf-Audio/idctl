@@ -2,5 +2,6 @@
 //! load and buffer settings, read and set through PipeWire's own tools.
 
 pub mod graph;
+pub mod pw;
 pub mod stats;
 pub mod top;

@@ -7,12 +7,12 @@ use idctl_protocol::params::{output, system};
 
 use super::monitor::VOLUME_TAPER;
 use super::{key, trim_khz};
-use crate::clock::RATES;
 use crate::model::Model;
 use crate::theme::{self, caption, palette as p};
 use crate::watch::PHONES;
 use crate::widgets::Knob;
 use crate::{App, Message};
+use idctl_audio::pw::RATES;
 
 /// Headphone sources: label and the left sample-bus id of the stereo pair.
 const PHONES_SOURCES: [(&str, u8); 4] =

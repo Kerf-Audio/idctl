@@ -1347,6 +1347,7 @@ name = "idctl-audio"
 version = "0.1.0"
 dependencies = [
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -1354,6 +1355,7 @@ name = "idctl-gui"
 version = "0.1.0"
 dependencies = [
  "iced",
+ "idctl-audio",
  "idctl-protocol",
  "idctl-usb",
  "tokio",
