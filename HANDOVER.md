@@ -1,8 +1,9 @@
 # Handover
 
-State of D+ Control at commit `03a410b` plus this handover (branch
-`latency/page`; `main` and release `v0.1.0` on GitHub are at `03a410b`).
-Updated 17 Nov 2026.
+State of D+ Control 0.2.0 (renamed from iD Mixer on 17 Nov 2026). Branch
+`design/generic-ui` is merged into `main` and pushed; `main` and release
+`v0.2.0` on GitHub are at `643fc8b`. Release `v0.1.0` and the old branches
+are deleted from GitHub. Updated 17 Nov 2026.
 
 ## What it is
 
@@ -13,6 +14,30 @@ transport), `idctl-audio` (PipeWire graph: xruns, load, buffer, profiles),
 `https://github.com/Kerf-Audio/idctl`, MIT, README with screenshots and a
 known-issues list.
 
+## Redesign and rename (17 Nov 2026)
+
+After a legal discussion the app was changed so it no longer resembles the
+vendor's: generic names, a new look, a new name.
+
+- Names: Warm (was the vendor's tone feature), Tone A, Tone B, Input mode 1/2/3,
+  Phase, Reverb, Auto gain. Routing uses "Pass-through" and "Computer outs".
+  No vendor feature names or "iD" branding in code, docs, packaging or the
+  release. Only the compatibility statement names the Audient iD2+.
+- Look: blue-black palette, violet mics, amber optical, cyan computer, lime
+  monitoring; flat keys, flat dial with dotted scale, slim fader with block
+  meters (`theme.rs`, `widgets/knob.rs`, `widgets/fader.rs`). Controls dim when
+  the interface is offline, so check screenshots with the device connected.
+- Name D+ Control, icon `packaging/dplus-control.svg`, window class
+  `dplus-control`, state folder `~/.local/state/dplus-control` (the old
+  `id-mixer` folder is moved over on first start; tested in `state.rs`).
+  Binary and crates stay `idctl-gui` and `idctl-*`; repo stays `idctl`.
+- Old design archived: private repo `Kerf-Audio/idctl-old-design`, local branch
+  `archive/old-design` (`03a410b`), WNAS `/volume2/Github Backups/idctl-old-design/`
+  (old build, screenshots, git bundle), `~/Pictures/idctl-old-design/`. The old
+  design is still in the public git history; history was not rewritten.
+- Screenshots in `docs/images` were taken from the app itself with a throwaway
+  patch (iced `window::screenshot`, not committed).
+
 ## Build, install, release
 
 - `cargo fmt --all && cargo clippy --all-targets -- -D warnings && cargo test --all`
@@ -21,7 +46,7 @@ known-issues list.
   container (binary needs glibc 2.35), strips it and packs an allow-list
   (binary, desktop entry, icons, udev rule, `install.sh`, `uninstall.sh`,
   `INSTALL.txt`, LICENSE) into `dist/` with `SHA256SUMS`. Needs Docker on
-  x86_64. Published as release `v0.1.0`.
+  x86_64. Published as release `v0.2.0` (version from `Cargo.toml`).
 - CI: `.github/workflows/ci.yml` runs on pushes to `main` and passes. Still to
   do: `permissions: contents: read`, pin actions by SHA, optional audit job.
 
@@ -44,7 +69,7 @@ Design `docs/superpowers/specs/2026-11-17-latency-page-design.md`, plan
   Presets are kept in `.../profile.json`. Copy and Paste profile use the
   clipboard.
 - Both reviews (security, correctness) were acted on. Tests: idctl-audio 78,
-  idctl-gui 57.
+  idctl-gui 59.
 
 ## Not done
 
@@ -75,15 +100,19 @@ Device:
 Tested on one iD2+, one machine (Arch, Hyprland, PipeWire 1.6.9). Not
 exercised against the hardware since the review fixes: talkback restore,
 transient-error retries, offline dimming, the +48V dialog, close handling.
-The release tarball was installed into a temp folder but its binary was not
-launched. Copy and Paste profile were covered by tests only.
+The release tarball's contents were checked but its installed binary was not
+launched. The redesigned keys, meters and the Tone card were seen only in my
+own screenshots, not yet in your hands on a long session. Copy and Paste profile were covered by tests only.
 
 ## Outside the repo
 
 - Danny has emailed Audient about the project and reported a bug that the
   headphone light ring does not match the audio level or the software.
-- The repo social preview (`docs/images/social-preview.png`) and the GitHub
-  profile avatar still need uploading by hand in GitHub settings.
+- The repo social preview (`docs/images/social-preview.png`, now D+ Control)
+  and the GitHub profile avatar (`~/Pictures/fmw-github-avatar.png`) still need
+  uploading by hand in GitHub settings.
+- The email to Audient (sent earlier) used the old name iD Mixer; the repo and
+  release are now D+ Control. A follow-up is Danny's call.
 
 ## Next steps
 
