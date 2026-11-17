@@ -93,6 +93,14 @@ pub async fn dump() -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+/// The PipeWire version `pw-cli` is linked with; `unknown` if it will not say.
+pub async fn pipewire_version() -> String {
+    let out = run("pw-cli", &["--version"]).await;
+    out.map_or("unknown".into(), |o| {
+        crate::profile::pipewire_version(&String::from_utf8_lossy(&o.stdout))
+    })
+}
+
 /// The command that runs `pw-top`. Into a pipe it writes in 4 KiB blocks, so
 /// a whole second can arrive late and in a burst; `stdbuf -oL` makes it
 /// deliver each line as it is printed.

@@ -193,9 +193,11 @@ impl App {
         let (ack_tx, ack_rx) = std::sync::mpsc::channel();
         let written = self.tx.send(Command::Quit(ack_tx)).is_ok()
             && ack_rx.recv_timeout(Duration::from_secs(1)) == Ok(true);
-        if self.rate_forced {
-            idctl_audio::pw::release_rate();
-        }
+        // Both give up on their own after a few seconds; run side by side so
+        // a stuck PipeWire costs the window one wait, not two.
+        let rate = self
+            .rate_forced
+            .then(|| std::thread::spawn(idctl_audio::pw::release_rate));
         if let Some(found) = self.latency.take_found() {
             let back = idctl_audio::pw::restore_blocking(
                 found,
@@ -206,6 +208,9 @@ impl App {
             if back {
                 self.latency.confirm_restored();
             }
+        }
+        if let Some(rate) = rate {
+            let _ = rate.join();
         }
         written
     }

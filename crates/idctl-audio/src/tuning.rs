@@ -27,6 +27,11 @@ pub struct Presets {
 }
 
 impl Presets {
+    /// Every preset, smallest buffer first.
+    pub fn all(&self) -> &[Tuning] {
+        &self.tunings
+    }
+
     pub fn get(&self, quantum: u32) -> Option<Tuning> {
         self.tunings.iter().copied().find(|t| t.quantum == quantum)
     }

@@ -8,6 +8,7 @@ use iced::futures::{SinkExt, Stream};
 use iced::{Subscription, Task};
 
 use idctl_audio::graph::{self, Interface};
+use idctl_audio::profile::{self, Profile};
 use idctl_audio::pw;
 use idctl_audio::stats::{Monitor, Snapshot};
 use idctl_audio::sysload::{self, Memory, Sampler};
@@ -17,6 +18,20 @@ use idctl_usb::{PRODUCT_ID_ID2_PLUS, VENDOR_ID};
 
 /// How long to wait before starting `pw-top` again after it stops.
 const RETRY: Duration = Duration::from_secs(2);
+
+/// What one `pw-dump` says that the page needs, read once.
+#[derive(Debug, Clone)]
+pub struct Scan {
+    interface: Option<Interface>,
+    listeners: Vec<String>,
+}
+
+fn scan(dump: &str) -> Result<Scan, String> {
+    Ok(Scan {
+        interface: graph::interface(dump, VENDOR_ID, PRODUCT_ID_ID2_PLUS)?,
+        listeners: graph::listeners(dump),
+    })
+}
 
 /// What the `pw-top` subscription reports.
 #[derive(Debug, Clone)]
@@ -31,7 +46,7 @@ pub enum Msg {
     /// The page was opened.
     Opened,
     Feed(Feed),
-    Dumped(Result<String, String>),
+    Dumped(Result<Scan, String>),
     ResetCounts,
     /// A buffer-size key, or Off: hand the buffer back to the applications.
     Buffer(Option<u32>),
@@ -43,6 +58,14 @@ pub enum Msg {
     Restored(Result<(), String>),
     /// A crashed run's leftovers were put back at start-up.
     Recovered(Result<(), String>),
+    /// Copy this machine's profile to the clipboard.
+    Export,
+    /// The PipeWire version, once asked for.
+    Exported(String),
+    /// Read a profile from the clipboard.
+    Import,
+    /// The clipboard's text, if it had any.
+    Imported(Option<String>),
 }
 
 pub struct State {
@@ -70,6 +93,12 @@ pub struct State {
     pub busy: bool,
     /// Why the last change failed.
     pub error: Option<String>,
+    /// What the last profile copy or paste did.
+    pub note: Option<String>,
+    /// This machine's CPU model, as a profile names it.
+    machine: String,
+    /// Where the presets in use are kept between runs.
+    profile_file: Option<PathBuf>,
     /// What to put back when the mode goes off or the app closes.
     found: Option<Found>,
     /// Where `found` is kept in case the app dies while forcing.
@@ -78,7 +107,10 @@ pub struct State {
 
 impl Default for State {
     fn default() -> Self {
-        Self::with_record(crate::state::path("latency"))
+        Self::with_files(
+            crate::state::path("latency"),
+            crate::state::path("profile.json"),
+        )
     }
 }
 
@@ -95,7 +127,19 @@ fn peek(record: &Path) -> Option<Found> {
 }
 
 impl State {
+    #[cfg(test)]
     pub fn with_record(record: Option<PathBuf>) -> Self {
+        Self::with_files(record, None)
+    }
+
+    pub fn with_files(record: Option<PathBuf>, profile_file: Option<PathBuf>) -> Self {
+        let presets = profile_file
+            .as_deref()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .and_then(|text| Profile::parse(&text).ok())
+            .and_then(|profile| profile.presets().ok())
+            .unwrap_or_default();
+        let cpuinfo = std::fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
         Self {
             snapshot: None,
             interface: None,
@@ -107,10 +151,13 @@ impl State {
             monitor: Monitor::new(Vec::new()),
             nodes: Vec::new(),
             dump_pending: false,
-            presets: Presets::default(),
+            presets,
             buffer: None,
             busy: false,
             error: None,
+            note: None,
+            machine: profile::machine(&cpuinfo),
+            profile_file,
             found: None,
             record,
         }
@@ -153,6 +200,18 @@ impl State {
         let temp = path.with_extension("tmp");
         std::fs::write(&temp, tuning::encode(found))?;
         std::fs::rename(&temp, path)
+    }
+
+    /// Keep the presets in use, so a restart finds them again.
+    fn save_profile(&self) {
+        let Some(path) = &self.profile_file else {
+            return;
+        };
+        let profile = Profile::new(self.machine.clone(), "unknown".into(), &self.presets);
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(path, profile.to_json());
     }
 
     fn forget_record(&self) {
@@ -201,8 +260,8 @@ impl State {
             }
             Msg::Dumped(dump) => {
                 self.dump_pending = false;
-                let dump = match dump {
-                    Ok(dump) => dump,
+                let scan = match dump {
+                    Ok(scan) => scan,
                     Err(_) => {
                         // Keep what is known and ask again at the next
                         // iteration.
@@ -210,10 +269,8 @@ impl State {
                         return Task::none();
                     }
                 };
-                self.monitor.set_listeners(graph::listeners(&dump));
-                self.interface = graph::interface(&dump, VENDOR_ID, PRODUCT_ID_ID2_PLUS)
-                    .ok()
-                    .flatten();
+                self.monitor.set_listeners(scan.listeners);
+                self.interface = scan.interface;
                 let names = self.interface.iter().flat_map(|i| &i.nodes);
                 self.monitor
                     .set_interface(names.map(|n| n.name.clone()).collect());
@@ -244,6 +301,7 @@ impl State {
                 Err(why) => self.error = Some(why),
                 Ok(()) => {
                     self.error = None;
+                    self.save_profile();
                     if self.buffer == Some(tuning.quantum) {
                         return self.apply(tuning);
                     }
@@ -285,6 +343,44 @@ impl State {
                 self.busy = false;
                 self.error = Some(why);
             }
+            Msg::Export => return Task::perform(pw::pipewire_version(), Msg::Exported),
+            Msg::Exported(pipewire) => {
+                let profile = Profile::new(self.machine.clone(), pipewire, &self.presets);
+                self.error = None;
+                self.note = Some("Copied the profile to the clipboard.".into());
+                return iced::clipboard::write(profile.to_json());
+            }
+            Msg::Import => return iced::clipboard::read().map(Msg::Imported),
+            Msg::Imported(text) => {
+                let parsed = text
+                    .ok_or_else(|| "The clipboard has no text.".to_owned())
+                    .and_then(|text| Profile::parse(&text))
+                    .and_then(|profile| Ok((profile.presets()?, profile)));
+                match parsed {
+                    Err(why) => {
+                        self.note = None;
+                        self.error = Some(why);
+                    }
+                    Ok((presets, profile)) => {
+                        self.presets = presets;
+                        self.save_profile();
+                        self.error = None;
+                        self.note = Some(if profile.untested_on(&self.machine) {
+                            format!(
+                                "Imported a profile tuned on {}. That is another machine, so \
+                                 treat it as a starting point and test it.",
+                                profile.machine
+                            )
+                        } else {
+                            format!("Imported the profile tuned on {}.", profile.machine)
+                        });
+                        let in_use = self.buffer.and_then(|frames| self.presets.get(frames));
+                        if let Some(tuning) = in_use {
+                            return self.apply(tuning);
+                        }
+                    }
+                }
+            }
             Msg::Recovered(Ok(())) => self.forget_record(),
             Msg::Recovered(Err(why)) => {
                 self.error = Some(format!("Could not put the buffer back: {why}"));
@@ -303,7 +399,7 @@ impl State {
             return Task::none();
         }
         self.dump_pending = true;
-        Task::perform(pw::dump(), Msg::Dumped)
+        Task::perform(async { scan(&pw::dump().await?) }, Msg::Dumped)
     }
 
     /// Ask PipeWire again when the set of nodes changes.
@@ -363,6 +459,7 @@ fn lines() -> impl Stream<Item = Feed> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use idctl_audio::profile::Profile;
     use idctl_audio::stats::Driving;
     use idctl_audio::tuning;
     use std::path::{Path, PathBuf};
@@ -377,9 +474,9 @@ mod tests {
     }
 
     fn opened() -> State {
-        let mut state = State::default();
+        let mut state = State::with_record(None);
         let _ = state.update(Msg::Opened, 100);
-        let _ = state.update(Msg::Dumped(Ok(PRO_AUDIO.into())), 100);
+        let _ = state.update(Msg::Dumped(scan(PRO_AUDIO)), 100);
         state
     }
 
@@ -650,5 +747,91 @@ mod tests {
         assert!(!state.busy);
         assert_eq!(state.take_found(), None);
         assert!(state.error.as_deref().unwrap().starts_with("Cannot save"));
+    }
+
+    fn shared(machine: &str) -> (String, Presets) {
+        let mut presets = Presets::default();
+        presets
+            .set(Tuning {
+                quantum: 128,
+                period: Some(256),
+                headroom: Some(128),
+            })
+            .unwrap();
+        let text = Profile::new(machine.into(), "1.6.9".into(), &presets).to_json();
+        (text, presets)
+    }
+
+    #[test]
+    fn a_pasted_profile_replaces_the_presets_and_is_kept() {
+        let file = record();
+        let mut state = State::with_files(None, Some(file.clone()));
+        state.machine = "Ryzen 7".into();
+        let (text, presets) = shared("Ryzen 7");
+        let _ = state.update(Msg::Imported(Some(text)), 100);
+        assert_eq!(state.presets, presets);
+        assert!(state.error.is_none());
+        assert!(state.note.as_deref().unwrap().contains("Ryzen 7"));
+        // A fresh start reads it back.
+        let again = State::with_files(None, Some(file.clone()));
+        assert_eq!(again.presets, presets);
+        let _ = std::fs::remove_file(file);
+    }
+
+    #[test]
+    fn a_profile_from_another_machine_says_so() {
+        let mut state = State::with_files(None, None);
+        state.machine = "Core i5".into();
+        let (text, _) = shared("Ryzen 7");
+        let _ = state.update(Msg::Imported(Some(text)), 100);
+        assert!(state.note.as_deref().unwrap().contains("another machine"));
+    }
+
+    #[test]
+    fn text_that_is_not_a_profile_changes_nothing() {
+        let file = record();
+        let mut state = State::with_files(None, Some(file.clone()));
+        let before = state.presets.clone();
+        for text in [None, Some("hello".to_owned())] {
+            let _ = state.update(Msg::Imported(text), 100);
+            assert_eq!(state.presets, before);
+            assert!(state.error.is_some());
+        }
+        assert!(!file.exists());
+    }
+
+    #[test]
+    fn importing_while_a_buffer_is_in_use_applies_it() {
+        let path = record();
+        let mut state = forcing(&path);
+        state.busy = false;
+        let (text, presets) = shared("x");
+        let _ = state.update(Msg::Imported(Some(text)), 101);
+        assert_eq!(state.presets, presets);
+        assert!(state.busy, "the new numbers are on their way to PipeWire");
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn an_edit_is_kept_for_the_next_start() {
+        let file = record();
+        let mut state = State::with_files(None, Some(file.clone()));
+        let tuning = Tuning {
+            headroom: Some(16),
+            ..state.presets.get(64).unwrap()
+        };
+        let _ = state.update(Msg::Edit(tuning), 100);
+        assert_eq!(
+            State::with_files(None, Some(file.clone())).presets.get(64),
+            Some(tuning)
+        );
+        let _ = std::fs::remove_file(file);
+    }
+
+    #[test]
+    fn copying_the_profile_says_so() {
+        let mut state = State::with_files(None, None);
+        let _ = state.update(Msg::Exported("1.6.9".into()), 100);
+        assert!(state.note.as_deref().unwrap().starts_with("Copied"));
     }
 }

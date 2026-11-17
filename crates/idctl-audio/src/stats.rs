@@ -122,6 +122,7 @@ impl Monitor {
         let (mut quantum, mut rate) = (0, 0);
         let mut interface_load = 0.0_f32;
         let mut present: Vec<&str> = Vec::new();
+        let mut loads: HashMap<&str, f32> = HashMap::new();
         let mut total = 0;
         let mut driver: Option<&Row> = None;
 
@@ -163,7 +164,10 @@ impl Monitor {
                 let app = &mut self.apps[index];
                 app.listener = self.listeners.contains(&row.name);
                 app.add(new, at);
-                app.set_load(load);
+                loads
+                    .entry(&row.name)
+                    .and_modify(|l| *l = l.max(load))
+                    .or_insert(load);
                 present.push(&row.name);
                 if !app.listener {
                     total += new;
@@ -175,9 +179,11 @@ impl Monitor {
         self.interface.set_load(interface_load);
         self.apps
             .retain(|a| a.xruns > 0 || present.contains(&a.name.as_str()));
+        // One load per application: the busiest of its streams.
         for app in &mut self.apps {
-            if !present.contains(&app.name.as_str()) {
-                app.load = 0.0;
+            match loads.get(app.name.as_str()) {
+                Some(load) => app.set_load(*load),
+                None => app.load = 0.0,
             }
         }
         if self.history.len() == HISTORY_SECS {
@@ -418,5 +424,22 @@ mod tests {
         m.frame(&crowd(0), 100);
         let s = m.frame(&crowd(3), 101);
         assert_eq!(s.apps.len(), 64);
+    }
+
+    #[test]
+    fn two_streams_of_one_app_show_the_busier_load() {
+        for order in [[0.6, 0.2], [0.2, 0.6]] {
+            let mut m = monitor();
+            let s = m.frame(
+                &[
+                    row(44, OUT, false, 0, 0.1),
+                    row(50, "Browser", true, 0, order[0]),
+                    row(51, "Browser", true, 0, order[1]),
+                ],
+                100,
+            );
+            assert_eq!(s.apps.len(), 1);
+            assert!((s.apps[0].load - 0.6).abs() < 1e-6, "{order:?}");
+        }
     }
 }

@@ -22,6 +22,7 @@ const TILE_HEIGHT: f32 = 96.0;
 const ROW_HEIGHT: f32 = 30.0;
 const STRIP_HEIGHT: f32 = 56.0;
 const SIZE_KEY: f32 = 120.0;
+const SHARE_KEY: f32 = 150.0;
 const STEP_KEY: f32 = 36.0;
 const STEP_VALUE: f32 = 84.0;
 
@@ -201,6 +202,27 @@ fn buffer(state: &State) -> Element<'_, Message> {
     .spacing(28)
     .align_y(Alignment::End);
 
+    let share = |label: &str, msg: Msg| {
+        key(label, false, p::CLOCK, Message::Latency(msg.clone()))
+            .on_press_maybe((!state.busy).then_some(Message::Latency(msg)))
+            .width(SHARE_KEY)
+    };
+    let profile = row![
+        share("Copy profile", Msg::Export),
+        share("Paste profile", Msg::Import),
+        container(
+            text(state.note.clone().unwrap_or_else(|| {
+                "Share these settings as text, or paste another machine's.".into()
+            }))
+            .size(12)
+            .color(p::MUTED)
+        )
+        .height(ROW_HEIGHT)
+        .align_y(Alignment::Center),
+    ]
+    .spacing(8)
+    .align_y(Alignment::Center);
+
     panel(
         "Buffer (frames)",
         None,
@@ -208,7 +230,9 @@ fn buffer(state: &State) -> Element<'_, Message> {
             keys,
             container(status.size(13)).height(20),
             space().height(2),
-            values
+            values,
+            space().height(2),
+            profile
         ]
         .spacing(10)
         .into(),
