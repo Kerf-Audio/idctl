@@ -1,0 +1,18 @@
+# Builds iD Mixer on Debian 12 so the binary needs only glibc 2.35, and runs
+# on that and anything newer. Used by packaging/build-release.sh.
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    RUSTUP_HOME=/opt/rustup \
+    CARGO_HOME=/opt/cargo \
+    PATH=/opt/cargo/bin:$PATH
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential pkg-config ca-certificates curl \
+        libusb-1.0-0-dev libudev-dev libxkbcommon-dev libwayland-dev libx11-dev \
+    && apt-get clean
+
+# The toolchain version the workspace declares as its minimum.
+RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.90.0
+
+WORKDIR /src

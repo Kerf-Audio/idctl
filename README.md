@@ -75,6 +75,25 @@ normal.
 
 ## Install
 
+### Prebuilt release
+
+Download `idctl-<version>-linux-x86_64.tar.gz` and its `SHA256SUMS` from the
+[releases page](https://github.com/Kerf-Audio/idctl/releases), then:
+
+```sh
+sha256sum -c SHA256SUMS
+tar -xzf idctl-*-linux-x86_64.tar.gz
+cd idctl-*-linux-x86_64
+./install.sh --udev
+```
+
+That installs the app, its icon and an app-list entry under `~/.local`, and
+the device rule that lets your user open the interface (it asks for your
+password). Replug the interface afterwards. It is built on Debian 12, so it
+needs glibc 2.35 or newer (Ubuntu 22.04 and later, Debian 12 and later,
+current Fedora and Arch), plus `libusb-1.0` and `libudev`. `./uninstall.sh
+--udev` removes it. If it does not start on your system, build from source.
+
 ### Build from source
 
 You need Rust 1.90 or newer and the development files for libusb, libudev,
