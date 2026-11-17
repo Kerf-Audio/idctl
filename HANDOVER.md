@@ -1,40 +1,64 @@
 # Handover
 
-State of iD Mixer at commit `9a527b621f` (branch `main`).
+State of iD Mixer at commit `03a410b` plus this handover (branch
+`latency/page`; `main` and release `v0.1.0` on GitHub are at `03a410b`).
+Updated 17 Nov 2026.
 
 ## What it is
 
 Linux control app (Rust, iced 0.14) for the Audient iD2+. Crates:
 `idctl-protocol` (wire format, parameter map, DSP maths), `idctl-usb` (rusb
-transport), `idctl-gui` (the app). MSRV 1.90.
+transport), `idctl-audio` (PipeWire graph: xruns, load, buffer, profiles),
+`idctl-gui` (the app). MSRV 1.90. Public repo
+`https://github.com/Kerf-Audio/idctl`, MIT, README with screenshots and a
+known-issues list.
 
-## Build and install
+## Build, install, release
 
 - `cargo fmt --all && cargo clippy --all-targets -- -D warnings && cargo test --all`
-- `packaging/install-local.sh` builds release and installs to `~/.local`
-  (binary `idctl-gui`, desktop entry `id-mixer.desktop`, icon `id-mixer`).
-- `packaging/70-id2plus.rules` lets a normal user open the device.
-- CI: `.github/workflows/ci.yml` (fmt, clippy, test, MSRV). Never run on GitHub;
-  its apt package list is a guess.
+- `packaging/install-local.sh` builds release and installs to `~/.local`.
+- `packaging/build-release.sh` builds the Linux tarball in a Debian 12
+  container (binary needs glibc 2.35), strips it and packs an allow-list
+  (binary, desktop entry, icons, udev rule, `install.sh`, `uninstall.sh`,
+  `INSTALL.txt`, LICENSE) into `dist/` with `SHA256SUMS`. Needs Docker on
+  x86_64. Published as release `v0.1.0`.
+- CI: `.github/workflows/ci.yml` runs on pushes to `main` and passes. Still to
+  do: `permissions: contents: read`, pin actions by SHA, optional audit job.
 
-## How it hangs together
+## Latency page (new, 17 Nov 2026)
 
-- `worker.rs`: the only code that touches USB. Ordered write queue, newest write
-  per parameter wins, transient USB errors absorbed (5 strikes then reconnect),
-  `Quit` flushes the queue (3 retries) and acknowledges whether it all landed.
-  The `Transport` trait has a fake in the tests.
-- `main.rs`: `App` / `update`. While offline the UI is dimmed and writes are
-  dropped (`Message::writes_device`). +48V asks for confirmation first.
-- `talkback.rs`: while TB is on the mic is sent at 0 dB to Mix A and B; the
-  previous sends are restored on release, on close, and (from
-  `$XDG_STATE_HOME/id-mixer/talkback`) on the next connect if the app died.
-  Hand edits to that send during TB are adopted into the restore.
-- The unit reports DIM itself during talkback; the Dim key stays dark then.
-- `clock.rs`: sample rate by forcing the PipeWire graph rate with
-  `pw-metadata`; released on exit if we forced it.
+Design `docs/superpowers/specs/2026-11-17-latency-page-design.md`, plan
+`docs/superpowers/plans/2026-11-17-latency-page.md`, ledger (git-ignored)
+`.superpowers/sdd/2026-11-17-latency-page/progress.md`.
+
+- `idctl-audio`: `top` (pw-top parser, strict header, bounded rows), `graph`
+  (pw-dump), `stats` (xruns and load split interface vs apps, listeners marked,
+  one load per app), `tuning` (presets 32/64/128/256, validate, crash record),
+  `pw` (force quantum, period and headroom through `pw-metadata` and `pw-cli`,
+  `pw-top` through `stdbuf -oL`), `sysload` (smoothed CPU, memory), `sweep`
+  (test-run state machine, not wired up), `profile` (copy and paste JSON).
+- GUI `latency.rs` and `views/latency.rs`. Buffer keys Off/32/64/128/256. Off
+  hands the buffer back. What was found is written to
+  `$XDG_STATE_HOME/id-mixer/latency` before forcing, put back on Off, on close
+  (record kept if the restore fails) and on the next start (background task).
+  Presets are kept in `.../profile.json`. Copy and Paste profile use the
+  clipboard.
+- Both reviews (security, correctness) were acted on. Tests: idctl-audio 78,
+  idctl-gui 57.
 
 ## Not done
 
+Latency page:
+- Plan Task 11 (Keep/Revert and conflicting-file check), rest of 12, 14 (silent
+  sine stress test, record and round-trip tests) and 15 (system check). The
+  sweep is unwired, so profile suggestions from a test run do not exist yet.
+  When wiring it, add a timeout for `pw-top` dying mid-run.
+- Task 16, the hardware walk-through: pops when the buffer changes, compare
+  with `pw-top`, `kill -9` then restart recovery.
+- Closing the window can wait for PipeWire for a few seconds if it is wedged.
+- `views/latency.rs` and `latency.rs` are at the 500-line guideline.
+
+Device:
 - Polarity, Record FX, SmartGain, clock source. Blocked on protocol facts, not
   effort. `params.rs` has no polarity address; input params `0x08` and `0x0c`
   accept writes and could be it, but nothing observable says what they do.
@@ -42,19 +66,27 @@ transport), `idctl-gui` (the app). MSRV 1.90.
   one can drop the clock). SmartGain has addresses and status values but not the
   trigger sequence the official app uses. Needs a capture of the official app,
   or a mic signal to test polarity with.
-- No ramp or ceiling on monitor/headphone level writes (knobs stop at 0 dB).
-- Dim key presses are ignored while TB is on.
+- The FN button is not assigned. No ramp or ceiling on monitor and headphone
+  level writes. Dim key presses are ignored while TB is on.
 - `update()` is one large match; `Message` carries `ParamAddr`.
 
 ## Untested
 
-Nothing has been exercised against the physical iD2+ since the review fixes:
-talkback restore (including from the state file), transient-error retries,
-offline dimming, the +48V dialog, close handling, and the Dim-during-TB change.
-Dim-during-TB is inferred from code and a user report.
+Tested on one iD2+, one machine (Arch, Hyprland, PipeWire 1.6.9). Not
+exercised against the hardware since the review fixes: talkback restore,
+transient-error retries, offline dimming, the +48V dialog, close handling.
+The release tarball was installed into a temp folder but its binary was not
+launched. Copy and Paste profile were covered by tests only.
+
+## Outside the repo
+
+- Danny has emailed Audient about the project and reported a bug that the
+  headphone light ring does not match the audio level or the software.
+- The repo social preview (`docs/images/social-preview.png`) and the GitHub
+  profile avatar still need uploading by hand in GitHub settings.
 
 ## Next steps
 
-1. Run the app against the hardware and walk through the list above.
-2. Capture the official app for the four missing features.
-3. Push and watch the first CI run; fix the apt list if it fails.
+1. Walk the hardware checklist (Task 16) and the untested list above.
+2. Wire the sweep into the page with Keep/Revert (Tasks 11, 12, 14, 15).
+3. Capture the official app for the four missing features.
