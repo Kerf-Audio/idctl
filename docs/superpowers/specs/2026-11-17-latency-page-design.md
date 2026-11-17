@@ -145,6 +145,13 @@ instead of showing counts that would point at the wrong thing.
 
 ### Settings and modes
 
+**Changed 17 Nov 2026 (Danny): buffer-size presets replace the three named
+modes.** The keys are Off, 32, 64, 128 and 256. Each buffer size has its own
+period and headroom, tuned for that size; those two are what "optimised"
+means, and what the test run measures and sets per size. Where this document
+says Safe, Balanced or Aggressive, read the buffer-size presets. Starting
+values: 32/32/32, 64/64/32, 128/128/64, 256/256/256 (buffer/period/headroom).
+
 Three values are controlled:
 
 | Value | How it is applied | Takes effect |

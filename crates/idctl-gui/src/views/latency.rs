@@ -8,10 +8,10 @@ use iced::{Alignment, Color, Element, Font, Length, Point, Rectangle, Renderer, 
 
 use idctl_audio::graph::Interface;
 use idctl_audio::stats::{buffer_ms, Driving, Party, Snapshot, HISTORY_SECS};
-use idctl_audio::tuning::{Mode, Tuning};
+use idctl_audio::tuning::{Tuning, BUFFERS};
 
 use super::{key, trim_khz};
-use crate::latency::{step_headroom, step_period, step_quantum, Msg, State};
+use crate::latency::{step_headroom, step_period, Msg, State};
 use crate::theme::{self, caption, palette as p};
 use crate::Message;
 
@@ -20,7 +20,7 @@ const PADDING: f32 = 20.0;
 const TILE_HEIGHT: f32 = 96.0;
 const ROW_HEIGHT: f32 = 30.0;
 const STRIP_HEIGHT: f32 = 56.0;
-const MODE_KEY: f32 = 150.0;
+const SIZE_KEY: f32 = 120.0;
 const STEP_KEY: f32 = 36.0;
 const STEP_VALUE: f32 = 84.0;
 
@@ -115,25 +115,22 @@ fn cell<'a>(
 
 fn buffer(state: &State) -> Element<'_, Message> {
     let ready = state.interface.is_some() && !state.busy;
-    let mode_key = |label: &str, mode: Option<Mode>| {
-        key(
-            label,
-            state.mode == mode,
-            p::CLOCK,
-            Message::Latency(Msg::Mode(mode)),
-        )
-        .on_press_maybe(ready.then_some(Message::Latency(Msg::Mode(mode))))
-        .width(MODE_KEY)
+    let size_key = |label: String, frames: Option<u32>| {
+        let msg = Message::Latency(Msg::Buffer(frames));
+        key(&label, state.buffer == frames, p::CLOCK, msg.clone())
+            .on_press_maybe(ready.then_some(msg))
+            .width(SIZE_KEY)
     };
-    let keys = row![
-        mode_key("Off", None),
-        mode_key("Safe", Some(Mode::Safe)),
-        mode_key("Balanced", Some(Mode::Balanced)),
-        mode_key("Aggressive", Some(Mode::Aggressive)),
-    ]
+    let keys = Row::with_children(
+        std::iter::once(size_key("Off".into(), None).into()).chain(
+            BUFFERS
+                .iter()
+                .map(|frames| size_key(frames.to_string(), Some(*frames)).into()),
+        ),
+    )
     .spacing(8);
 
-    let status = match (&state.error, state.busy, state.mode) {
+    let status = match (&state.error, state.busy, state.buffer) {
         (Some(why), _, _) => text(why.clone()).color(p::MUTE_ON),
         (None, true, _) => text("Applying.").color(p::MUTED),
         (None, false, None) => {
@@ -147,53 +144,45 @@ fn buffer(state: &State) -> Element<'_, Message> {
         .color(p::MUTED),
     };
 
-    // The values of the mode in force; with none, Balanced's, greyed.
-    let shown = state.mode.unwrap_or(Mode::Balanced);
-    let tuning = state.modes.get(shown);
-    let editable = ready && state.mode.is_some();
-    let edit = |t: Tuning| editable.then_some(Message::Latency(Msg::Edit(shown, t)));
-    let frames = |v: Option<u32>| v.map_or("system".to_owned(), |f| f.to_string());
+    // The period and headroom that go with the buffer in use; with none,
+    // those of the first size, greyed.
+    let tuning = state.presets.get(state.buffer.unwrap_or(BUFFERS[0]));
+    let editable = ready && state.buffer.is_some();
+    let edit = |t: Tuning| editable.then_some(Message::Latency(Msg::Edit(t)));
+    let frames = |v: Option<u32>| v.map_or(ABSENT.to_owned(), |f| f.to_string());
+    let with_period = |up| {
+        tuning.and_then(|t| {
+            edit(Tuning {
+                period: Some(step_period(t.period, up)),
+                ..t
+            })
+        })
+    };
+    let with_headroom = |up| {
+        tuning.and_then(|t| {
+            edit(Tuning {
+                headroom: Some(step_headroom(t.headroom, up)),
+                ..t
+            })
+        })
+    };
     let values = row![
         stepper(
-            "Buffer",
-            tuning.quantum.to_string(),
-            edit(Tuning {
-                quantum: step_quantum(tuning.quantum, false),
-                ..tuning
-            }),
-            edit(Tuning {
-                quantum: step_quantum(tuning.quantum, true),
-                ..tuning
-            }),
-        ),
-        stepper(
             "Period",
-            frames(tuning.period),
-            edit(Tuning {
-                period: Some(step_period(tuning.period, false)),
-                ..tuning
-            }),
-            edit(Tuning {
-                period: Some(step_period(tuning.period, true)),
-                ..tuning
-            }),
+            frames(tuning.and_then(|t| t.period)),
+            with_period(false),
+            with_period(true),
         ),
         stepper(
             "Headroom",
-            frames(tuning.headroom),
-            edit(Tuning {
-                headroom: Some(step_headroom(tuning.headroom, false)),
-                ..tuning
-            }),
-            edit(Tuning {
-                headroom: Some(step_headroom(tuning.headroom, true)),
-                ..tuning
-            }),
+            frames(tuning.and_then(|t| t.headroom)),
+            with_headroom(false),
+            with_headroom(true),
         ),
         container(
-            text(match state.mode {
-                Some(_) => "frames, for the mode in use",
-                None => "frames; pick a mode to change them",
+            text(match state.buffer {
+                Some(_) => "frames, tuned for the buffer in use",
+                None => "frames; pick a buffer size to tune them",
             })
             .size(12)
             .color(p::MUTED)
@@ -205,7 +194,7 @@ fn buffer(state: &State) -> Element<'_, Message> {
     .align_y(Alignment::End);
 
     panel(
-        "Buffer",
+        "Buffer (frames)",
         None,
         column![
             keys,

@@ -11,7 +11,7 @@ use idctl_audio::graph::{self, Interface};
 use idctl_audio::pw;
 use idctl_audio::stats::{Monitor, Snapshot};
 use idctl_audio::top::{Frames, Row};
-use idctl_audio::tuning::{self, Found, Mode, Modes, Tuning};
+use idctl_audio::tuning::{self, Found, Presets, Tuning};
 use idctl_usb::{PRODUCT_ID_ID2_PLUS, VENDOR_ID};
 
 /// How long to wait before starting `pw-top` again after it stops.
@@ -32,10 +32,10 @@ pub enum Msg {
     Feed(Feed),
     Dumped(Result<String, String>),
     ResetCounts,
-    /// A mode key, or Off: hand the buffer back to the applications.
-    Mode(Option<Mode>),
-    /// New values for a mode.
-    Edit(Mode, Tuning),
+    /// A buffer-size key, or Off: hand the buffer back to the applications.
+    Buffer(Option<u32>),
+    /// New period and headroom for the preset of this tuning's buffer size.
+    Edit(Tuning),
     /// What was in force before the first change, and the change waiting on it.
     Found(Result<Found, String>, Tuning),
     Applied(Result<(), String>),
@@ -57,9 +57,9 @@ pub struct State {
     /// nodes may have been recreated under new ids or names.
     alsa_nodes: Vec<u32>,
     dump_pending: bool,
-    pub modes: Modes,
-    /// The mode in force; none while applications choose their own buffer.
-    pub mode: Option<Mode>,
+    pub presets: Presets,
+    /// The buffer size in force; none while applications choose their own.
+    pub buffer: Option<u32>,
     /// A change is on its way to PipeWire.
     pub busy: bool,
     /// Why the last change failed.
@@ -103,8 +103,8 @@ impl State {
             monitor: Monitor::new(Vec::new()),
             alsa_nodes: Vec::new(),
             dump_pending: false,
-            modes: Modes::default(),
-            mode: None,
+            presets: Presets::default(),
+            buffer: None,
             busy: false,
             error: None,
             found: None,
@@ -177,12 +177,14 @@ impl State {
                 self.monitor.reset();
                 self.snapshot = None;
             }
-            Msg::Mode(Some(mode)) => {
-                self.mode = Some(mode);
-                return self.apply(self.modes.get(mode));
+            Msg::Buffer(Some(frames)) => {
+                if let Some(tuning) = self.presets.get(frames) {
+                    self.buffer = Some(frames);
+                    return self.apply(tuning);
+                }
             }
-            Msg::Mode(None) => {
-                self.mode = None;
+            Msg::Buffer(None) => {
+                self.buffer = None;
                 if let Some(found) = self.found.clone() {
                     self.busy = true;
                     self.error = None;
@@ -192,12 +194,11 @@ impl State {
                     );
                 }
             }
-            Msg::Edit(mode, tuning) => match tuning::validate(&tuning) {
+            Msg::Edit(tuning) => match self.presets.set(tuning) {
                 Err(why) => self.error = Some(why),
                 Ok(()) => {
                     self.error = None;
-                    self.modes.set(mode, tuning);
-                    if self.mode == Some(mode) {
+                    if self.buffer == Some(tuning.quantum) {
                         return self.apply(tuning);
                     }
                 }
@@ -214,7 +215,7 @@ impl State {
             }
             Msg::Found(Err(why), _) => {
                 self.busy = false;
-                self.mode = None;
+                self.buffer = None;
                 self.error = Some(why);
             }
             Msg::Applied(result) => {
@@ -262,12 +263,6 @@ impl State {
         self.alsa_nodes = alsa;
         self.dump()
     }
-}
-
-/// The next buffer size up or down: powers of two inside the allowed range.
-pub fn step_quantum(frames: u32, up: bool) -> u32 {
-    let (low, high) = tuning::QUANTUM;
-    if up { frames * 2 } else { frames / 2 }.clamp(low, high)
 }
 
 /// The next period up or down. Unset starts from 64.
@@ -408,8 +403,8 @@ mod tests {
 
     fn forcing(path: &Path) -> State {
         let mut state = State::with_record(Some(path.to_owned()));
-        let _ = state.update(Msg::Mode(Some(Mode::Balanced)), 100);
-        let tuning = state.modes.get(Mode::Balanced);
+        let _ = state.update(Msg::Buffer(Some(128)), 100);
+        let tuning = state.presets.get(128).unwrap();
         let _ = state.update(Msg::Found(Ok(found()), tuning), 100);
         let _ = state.update(Msg::Applied(Ok(())), 100);
         state
@@ -419,7 +414,7 @@ mod tests {
     fn first_apply_records_what_was_found() {
         let path = record();
         let state = forcing(&path);
-        assert_eq!(state.mode, Some(Mode::Balanced));
+        assert_eq!(state.buffer, Some(128));
         assert!(!state.busy);
         assert_eq!(state.error, None);
         assert_eq!(
@@ -433,9 +428,9 @@ mod tests {
     fn second_apply_keeps_the_first_record() {
         let path = record();
         let mut state = forcing(&path);
-        let _ = state.update(Msg::Mode(Some(Mode::Aggressive)), 101);
+        let _ = state.update(Msg::Buffer(Some(32)), 101);
         let _ = state.update(Msg::Applied(Ok(())), 101);
-        assert_eq!(state.mode, Some(Mode::Aggressive));
+        assert_eq!(state.buffer, Some(32));
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
             tuning::encode(&found())
@@ -447,8 +442,8 @@ mod tests {
     fn off_clears_the_record() {
         let path = record();
         let mut state = forcing(&path);
-        let _ = state.update(Msg::Mode(None), 101);
-        assert_eq!(state.mode, None);
+        let _ = state.update(Msg::Buffer(None), 101);
+        assert_eq!(state.buffer, None);
         assert!(path.exists(), "kept until the restore is confirmed");
         let _ = state.update(Msg::Restored(Ok(())), 102);
         assert!(!path.exists());
@@ -459,7 +454,7 @@ mod tests {
     fn a_failed_restore_keeps_the_record() {
         let path = record();
         let mut state = forcing(&path);
-        let _ = state.update(Msg::Mode(None), 101);
+        let _ = state.update(Msg::Buffer(None), 101);
         let _ = state.update(Msg::Restored(Err("pw-metadata: no".into())), 102);
         assert!(path.exists());
         assert_eq!(state.error.as_deref(), Some("pw-metadata: no"));
@@ -471,10 +466,10 @@ mod tests {
     fn a_failed_find_changes_nothing() {
         let path = record();
         let mut state = State::with_record(Some(path.clone()));
-        let _ = state.update(Msg::Mode(Some(Mode::Safe)), 100);
-        let tuning = state.modes.get(Mode::Safe);
+        let _ = state.update(Msg::Buffer(Some(256)), 100);
+        let tuning = state.presets.get(256).unwrap();
         let _ = state.update(Msg::Found(Err("pw-dump: no".into()), tuning), 100);
-        assert_eq!(state.mode, None);
+        assert_eq!(state.buffer, None);
         assert!(!state.busy);
         assert!(!path.exists());
         assert_eq!(state.error.as_deref(), Some("pw-dump: no"));
@@ -483,45 +478,48 @@ mod tests {
     #[test]
     fn an_invalid_edit_changes_nothing() {
         let mut state = State::with_record(None);
-        let before = state.modes.clone();
+        let before = state.presets.clone();
         let bad = Tuning {
-            quantum: 48,
-            ..before.balanced
+            period: Some(4),
+            ..before.get(128).unwrap()
         };
-        let _ = state.update(Msg::Edit(Mode::Balanced, bad), 100);
-        assert_eq!(state.modes, before);
-        assert!(state.error.as_deref().unwrap().starts_with("Buffer"));
+        let _ = state.update(Msg::Edit(bad), 100);
+        assert_eq!(state.presets, before);
+        assert!(state.error.as_deref().unwrap().starts_with("Period"));
         assert!(!state.busy);
     }
 
     #[test]
-    fn editing_the_mode_in_use_applies_it() {
+    fn editing_the_preset_in_use_applies_it() {
         let path = record();
         let mut state = forcing(&path);
-        let wider = Tuning {
-            quantum: 256,
-            ..state.modes.balanced
+        let other = Tuning {
+            headroom: Some(128),
+            ..state.presets.get(256).unwrap()
         };
-        let _ = state.update(Msg::Edit(Mode::Balanced, wider), 101);
-        assert_eq!(state.modes.balanced.quantum, 256);
+        let _ = state.update(Msg::Edit(other), 101);
+        assert_eq!(state.presets.get(256), Some(other));
+        assert!(!state.busy, "256 is not the buffer in use");
+        let wider = Tuning {
+            headroom: Some(128),
+            ..state.presets.get(128).unwrap()
+        };
+        let _ = state.update(Msg::Edit(wider), 102);
+        assert_eq!(state.presets.get(128), Some(wider));
         assert!(state.busy);
-        let _ = state.update(Msg::Edit(Mode::Safe, wider), 102);
-        assert_eq!(state.modes.safe.quantum, 256);
         let _ = std::fs::remove_file(path);
     }
 
     #[test]
     fn steps_stay_inside_the_allowed_ranges() {
-        assert_eq!((step_quantum(64, true), step_quantum(64, false)), (128, 32));
-        assert_eq!(
-            (step_quantum(8192, true), step_quantum(16, false)),
-            (8192, 16)
-        );
         assert_eq!(
             (step_period(None, true), step_period(Some(1024), true)),
             (64, 1024)
         );
-        assert_eq!(step_period(Some(16), false), 16);
+        assert_eq!(
+            (step_period(Some(64), true), step_period(Some(16), false)),
+            (128, 16)
+        );
         assert_eq!(
             (step_headroom(Some(0), true), step_headroom(Some(16), false)),
             (16, 0)

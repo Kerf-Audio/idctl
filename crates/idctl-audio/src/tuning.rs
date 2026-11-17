@@ -17,56 +17,48 @@ pub struct Tuning {
     pub headroom: Option<u32>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Mode {
-    Safe,
-    Balanced,
-    Aggressive,
-}
+/// The buffer sizes the page offers, in frames.
+pub const BUFFERS: [u32; 4] = [32, 64, 128, 256];
 
-impl Mode {
-    pub const ALL: [Mode; 3] = [Mode::Safe, Mode::Balanced, Mode::Aggressive];
-}
-
-/// What each mode asks for on this machine.
+/// The period and headroom that go with each buffer size on this machine.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Modes {
-    pub safe: Tuning,
-    pub balanced: Tuning,
-    pub aggressive: Tuning,
+pub struct Presets {
+    tunings: Vec<Tuning>,
 }
 
-impl Modes {
-    pub fn get(&self, mode: Mode) -> Tuning {
-        match mode {
-            Mode::Safe => self.safe,
-            Mode::Balanced => self.balanced,
-            Mode::Aggressive => self.aggressive,
-        }
+impl Presets {
+    pub fn get(&self, quantum: u32) -> Option<Tuning> {
+        self.tunings.iter().copied().find(|t| t.quantum == quantum)
     }
 
-    pub fn set(&mut self, mode: Mode, tuning: Tuning) {
-        match mode {
-            Mode::Safe => self.safe = tuning,
-            Mode::Balanced => self.balanced = tuning,
-            Mode::Aggressive => self.aggressive = tuning,
-        }
+    /// Replace the preset for this tuning's buffer size.
+    pub fn set(&mut self, tuning: Tuning) -> Result<(), String> {
+        validate(&tuning)?;
+        let slot = self
+            .tunings
+            .iter_mut()
+            .find(|t| t.quantum == tuning.quantum)
+            .ok_or_else(|| format!("Buffer has no preset for {} frames.", tuning.quantum))?;
+        *slot = tuning;
+        Ok(())
     }
 }
 
 /// Starting values, before a test run has measured the machine.
-impl Default for Modes {
+impl Default for Presets {
     fn default() -> Self {
         let tuning = |quantum, period, headroom| Tuning {
             quantum,
-            period,
-            headroom,
+            period: Some(period),
+            headroom: Some(headroom),
         };
         Self {
-            safe: tuning(256, None, None),
-            balanced: tuning(128, Some(128), Some(64)),
-            aggressive: tuning(32, Some(32), Some(32)),
+            tunings: vec![
+                tuning(32, 32, 32),
+                tuning(64, 64, 32),
+                tuning(128, 128, 64),
+                tuning(256, 256, 256),
+            ],
         }
     }
 }
@@ -141,11 +133,28 @@ mod tests {
     }
 
     #[test]
-    fn defaults_match_the_design_table() {
-        let m = Modes::default();
-        assert_eq!(m.get(Mode::Safe), tuning(256, None, None));
-        assert_eq!(m.get(Mode::Balanced), tuning(128, Some(128), Some(64)));
-        assert_eq!(m.get(Mode::Aggressive), tuning(32, Some(32), Some(32)));
+    fn there_is_a_preset_for_each_buffer_size() {
+        let p = Presets::default();
+        assert_eq!(BUFFERS, [32, 64, 128, 256]);
+        assert_eq!(p.get(32), Some(tuning(32, Some(32), Some(32))));
+        assert_eq!(p.get(64), Some(tuning(64, Some(64), Some(32))));
+        assert_eq!(p.get(128), Some(tuning(128, Some(128), Some(64))));
+        assert_eq!(p.get(256), Some(tuning(256, Some(256), Some(256))));
+        assert_eq!(p.get(512), None);
+    }
+
+    #[test]
+    fn a_preset_is_replaced_by_its_buffer_size() {
+        let mut p = Presets::default();
+        assert_eq!(p.set(tuning(64, Some(128), Some(16))), Ok(()));
+        assert_eq!(p.get(64), Some(tuning(64, Some(128), Some(16))));
+        assert_eq!(p.get(128), Presets::default().get(128));
+        assert!(p.set(tuning(512, None, None)).is_err());
+        assert!(p
+            .set(tuning(64, Some(4), None))
+            .unwrap_err()
+            .starts_with("Period"));
+        assert_eq!(p.get(64), Some(tuning(64, Some(128), Some(16))));
     }
 
     #[test]
