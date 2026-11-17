@@ -311,6 +311,19 @@ the app?".
 
 ## Open items for the hardware pass
 
+**Measured 17 Nov 2026** (iD2+, PipeWire 1.6.9, silent stream):
+
+- Period size and headroom written with `pw-cli set-param <node> Props` are
+  accepted and reported back at once, with no WirePlumber restart. The ALSA
+  device picks the new period up at the next reconfiguration, and a change of
+  the forced quantum is one. So a session change writes the node values, then
+  the quantum; if the quantum is already the wanted value it is moved one
+  step away and back.
+- The device's real ALSA period is half of `api.alsa.period-size` (32 gives
+  16, 256 gives 128): PipeWire halves it for USB devices.
+- Still open: whether a buffer change pops the monitors (needs ears), and the
+  mode table's starting values.
+
 These need the device and are settled during step 2, not before:
 
 - Whether period size and headroom set through Props apply without restarting
