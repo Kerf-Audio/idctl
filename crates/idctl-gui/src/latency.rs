@@ -41,6 +41,8 @@ pub enum Msg {
     Found(Result<Found, String>, Tuning),
     Applied(Result<(), String>),
     Restored(Result<(), String>),
+    /// A crashed run's leftovers were put back at start-up.
+    Recovered(Result<(), String>),
 }
 
 pub struct State {
@@ -80,20 +82,16 @@ impl Default for State {
     }
 }
 
-/// The record a crashed run left behind, removed as it is read. A record
-/// that does not decode is dropped: it cannot be acted on.
-pub fn leftover(record: &Path) -> Option<Found> {
+/// The record a crashed run left behind. It stays on disk until what it
+/// describes has been put back; one that does not decode is dropped, since
+/// it cannot be acted on.
+fn peek(record: &Path) -> Option<Found> {
     let text = std::fs::read_to_string(record).ok()?;
-    let _ = std::fs::remove_file(record);
-    tuning::decode(&text)
-}
-
-/// Put back what a crashed run left forced. Call once at start-up.
-pub fn recover() {
-    let found = crate::state::path("latency").and_then(|p| leftover(&p));
-    if let Some(found) = found {
-        pw::restore_blocking(found, VENDOR_ID, PRODUCT_ID_ID2_PLUS);
+    let found = tuning::decode(&text);
+    if found.is_none() {
+        let _ = std::fs::remove_file(record);
     }
+    found
 }
 
 impl State {
@@ -118,13 +116,43 @@ impl State {
         }
     }
 
-    /// What must be put back before the app closes, if anything.
+    /// Put back what a crashed run left forced, without holding up the
+    /// window. The record is removed only once PipeWire has taken it.
+    pub fn recover(&mut self) -> Task<Msg> {
+        let Some(found) = self.record.as_deref().and_then(peek) else {
+            return Task::none();
+        };
+        Task::perform(
+            pw::restore(found, VENDOR_ID, PRODUCT_ID_ID2_PLUS),
+            Msg::Recovered,
+        )
+    }
+
+    /// What must be put back before the app closes, if anything. The record
+    /// stays until `confirm_restored`, so a restore that fails is still
+    /// found on the next start.
     pub fn take_found(&mut self) -> Option<Found> {
-        let found = self.found.take();
-        if found.is_some() {
-            self.forget_record();
+        self.found.take()
+    }
+
+    /// The restore after `take_found` succeeded.
+    pub fn confirm_restored(&self) {
+        self.forget_record();
+    }
+
+    /// Write the record through a temporary file, so a crash while writing
+    /// never leaves half of one.
+    fn save_record(&self, found: &Found) -> std::io::Result<()> {
+        let path = self
+            .record
+            .as_deref()
+            .ok_or_else(|| std::io::Error::other("no state folder"))?;
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
         }
-        found
+        let temp = path.with_extension("tmp");
+        std::fs::write(&temp, tuning::encode(found))?;
+        std::fs::rename(&temp, path)
     }
 
     fn forget_record(&self) {
@@ -173,7 +201,15 @@ impl State {
             }
             Msg::Dumped(dump) => {
                 self.dump_pending = false;
-                let dump = dump.unwrap_or_default();
+                let dump = match dump {
+                    Ok(dump) => dump,
+                    Err(_) => {
+                        // Keep what is known and ask again at the next
+                        // iteration.
+                        self.nodes.clear();
+                        return Task::none();
+                    }
+                };
                 self.monitor.set_listeners(graph::listeners(&dump));
                 self.interface = graph::interface(&dump, VENDOR_ID, PRODUCT_ID_ID2_PLUS)
                     .ok()
@@ -192,9 +228,9 @@ impl State {
                     return self.apply(tuning);
                 }
             }
-            Msg::Buffer(None) => {
-                self.buffer = None;
-                if let Some(found) = self.found.clone() {
+            Msg::Buffer(None) => match self.found.clone() {
+                // The keys keep showing the buffer until it is really back.
+                Some(found) => {
                     self.busy = true;
                     self.error = None;
                     return Task::perform(
@@ -202,7 +238,8 @@ impl State {
                         Msg::Restored,
                     );
                 }
-            }
+                None => self.buffer = None,
+            },
             Msg::Edit(tuning) => match self.presets.set(tuning) {
                 Err(why) => self.error = Some(why),
                 Ok(()) => {
@@ -213,11 +250,13 @@ impl State {
                 }
             },
             Msg::Found(Ok(found), tuning) => {
-                if let Some(path) = &self.record {
-                    if let Some(dir) = path.parent() {
-                        let _ = std::fs::create_dir_all(dir);
-                    }
-                    let _ = std::fs::write(path, tuning::encode(&found));
+                if let Err(why) = self.save_record(&found) {
+                    // Without the record a crash would leave the buffer
+                    // forced for good, so do not force it.
+                    self.busy = false;
+                    self.buffer = None;
+                    self.error = Some(format!("Cannot save the safety record: {why}"));
+                    return Task::none();
                 }
                 self.found = Some(found);
                 return self.apply(tuning);
@@ -229,11 +268,15 @@ impl State {
             }
             Msg::Applied(result) => {
                 self.busy = false;
+                if result.is_err() {
+                    self.buffer = None;
+                }
                 self.error = result.err();
                 return self.dump();
             }
             Msg::Restored(Ok(())) => {
                 self.busy = false;
+                self.buffer = None;
                 self.found = None;
                 self.forget_record();
                 return self.dump();
@@ -241,6 +284,10 @@ impl State {
             Msg::Restored(Err(why)) => {
                 self.busy = false;
                 self.error = Some(why);
+            }
+            Msg::Recovered(Ok(())) => self.forget_record(),
+            Msg::Recovered(Err(why)) => {
+                self.error = Some(format!("Could not put the buffer back: {why}"));
             }
         }
         Task::none()
@@ -385,12 +432,13 @@ mod tests {
     }
 
     #[test]
-    fn a_failed_dump_forgets_the_interface() {
+    fn a_failed_dump_keeps_the_interface_and_asks_again() {
         let mut state = opened();
-        let _ = state.update(Msg::Dumped(Err("pw-dump: gone".into())), 101);
-        assert!(state.interface.is_none());
-        feed(&mut state, DRIVING, 102);
-        assert_eq!(state.snapshot.as_ref().unwrap().driving, Driving::Idle);
+        feed(&mut state, DRIVING, 101);
+        let _ = state.update(Msg::Dumped(Err("pw-dump: gone".into())), 102);
+        assert!(state.interface.is_some());
+        assert!(state.nodes.is_empty(), "the next iteration asks again");
+        assert!(!state.dump_pending);
     }
 
     fn record() -> PathBuf {
@@ -444,13 +492,18 @@ mod tests {
     }
 
     #[test]
-    fn off_clears_the_record() {
+    fn off_clears_the_record_once_the_restore_lands() {
         let path = record();
         let mut state = forcing(&path);
         let _ = state.update(Msg::Buffer(None), 101);
-        assert_eq!(state.buffer, None);
-        assert!(path.exists(), "kept until the restore is confirmed");
+        assert_eq!(
+            state.buffer,
+            Some(128),
+            "still forced until the restore lands"
+        );
+        assert!(path.exists());
         let _ = state.update(Msg::Restored(Ok(())), 102);
+        assert_eq!(state.buffer, None);
         assert!(!path.exists());
         assert!(state.take_found().is_none());
     }
@@ -462,6 +515,7 @@ mod tests {
         let _ = state.update(Msg::Buffer(None), 101);
         let _ = state.update(Msg::Restored(Err("pw-metadata: no".into())), 102);
         assert!(path.exists());
+        assert_eq!(state.buffer, Some(128));
         assert_eq!(state.error.as_deref(), Some("pw-metadata: no"));
         assert_eq!(state.take_found(), Some(found()));
         let _ = std::fs::remove_file(path);
@@ -537,19 +591,64 @@ mod tests {
     }
 
     #[test]
-    fn a_leftover_record_is_taken_once() {
+    fn a_leftover_record_is_read_and_kept() {
         let path = record();
         std::fs::write(&path, tuning::encode(&found())).unwrap();
-        assert_eq!(leftover(&path), Some(found()));
-        assert!(!path.exists());
-        assert_eq!(leftover(&path), None);
+        assert_eq!(peek(&path), Some(found()));
+        assert!(path.exists());
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]
     fn undecodable_record_is_deleted() {
         let path = record();
         std::fs::write(&path, "not a record").unwrap();
-        assert_eq!(leftover(&path), None);
+        assert_eq!(peek(&path), None);
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn the_shutdown_record_stays_until_the_restore_is_confirmed() {
+        let path = record();
+        let mut state = forcing(&path);
+        assert_eq!(state.take_found(), Some(found()));
+        assert!(path.exists());
+        state.confirm_restored();
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn a_recovered_record_is_removed_only_when_the_restore_worked() {
+        let path = record();
+        std::fs::write(&path, tuning::encode(&found())).unwrap();
+        let mut state = State::with_record(Some(path.clone()));
+        let _ = state.update(Msg::Recovered(Err("pw-metadata: no".into())), 100);
+        assert!(path.exists());
+        assert!(state.error.as_deref().unwrap().contains("pw-metadata: no"));
+        let _ = state.update(Msg::Recovered(Ok(())), 101);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn a_failed_apply_does_not_light_the_key() {
+        let path = record();
+        let mut state = forcing(&path);
+        let _ = state.update(Msg::Buffer(Some(32)), 101);
+        let _ = state.update(Msg::Applied(Err("pw-cli: gone".into())), 102);
+        assert_eq!(state.buffer, None);
+        assert_eq!(state.error.as_deref(), Some("pw-cli: gone"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn a_record_that_cannot_be_written_stops_the_change() {
+        let mut state = State::with_record(Some(std::env::temp_dir()));
+        let _ = state.update(Msg::Buffer(Some(128)), 100);
+        let tuning = state.presets.get(128).unwrap();
+        let _ = state.update(Msg::Found(Ok(found()), tuning), 100);
+        assert_eq!(state.buffer, None);
+        assert!(!state.busy);
+        assert_eq!(state.take_found(), None);
+        assert!(state.error.as_deref().unwrap().starts_with("Cannot save"));
     }
 }

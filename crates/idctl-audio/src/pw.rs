@@ -2,6 +2,7 @@
 //! driver owns the streaming interface, so everything about streaming is
 //! done by asking PipeWire.
 
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::thread;
@@ -92,6 +93,18 @@ pub async fn dump() -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+/// The command that runs `pw-top`. Into a pipe it writes in 4 KiB blocks, so
+/// a whole second can arrive late and in a burst; `stdbuf -oL` makes it
+/// deliver each line as it is printed.
+fn top_argv(stdbuf: Option<PathBuf>, top: PathBuf) -> Vec<OsString> {
+    let mut argv = Vec::new();
+    if let Some(stdbuf) = stdbuf {
+        argv.extend([stdbuf.into_os_string(), "-oL".into()]);
+    }
+    argv.extend([top.into_os_string(), "-b".into()]);
+    argv
+}
+
 /// A running `pw-top -b`. Dropping it stops the process.
 pub struct Top {
     lines: Lines<BufReader<ChildStdout>>,
@@ -100,8 +113,14 @@ pub struct Top {
 
 impl Top {
     pub fn spawn() -> std::io::Result<Top> {
-        let mut child = tokio::process::Command::new(tool("pw-top"))
-            .arg("-b")
+        let argv = top_argv(
+            Path::new("/usr/bin/stdbuf")
+                .exists()
+                .then(|| PathBuf::from("/usr/bin/stdbuf")),
+            tool("pw-top"),
+        );
+        let mut child = tokio::process::Command::new(&argv[0])
+            .args(&argv[1..])
             // Numbers with a decimal point, whatever the desktop's locale.
             .env("LC_ALL", "C")
             .stdin(Stdio::null())
@@ -344,5 +363,18 @@ mod tests {
     fn nudge_moves_one_step_away_and_stays_in_range() {
         assert_eq!(nudge(64), 128);
         assert_eq!(nudge(8192), 4096);
+    }
+
+    #[test]
+    fn pw_top_is_line_buffered_when_stdbuf_is_there() {
+        let top = PathBuf::from("/usr/bin/pw-top");
+        assert_eq!(
+            top_argv(Some(PathBuf::from("/usr/bin/stdbuf")), top.clone()),
+            ["/usr/bin/stdbuf", "-oL", "/usr/bin/pw-top", "-b"].map(OsString::from)
+        );
+        assert_eq!(
+            top_argv(None, top),
+            ["/usr/bin/pw-top", "-b"].map(OsString::from)
+        );
     }
 }

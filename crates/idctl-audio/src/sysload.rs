@@ -79,6 +79,14 @@ pub fn memory() -> Option<Memory> {
     parse_meminfo(&fs::read_to_string("/proc/meminfo").ok()?)
 }
 
+/// Shortest span, in clock ticks of 10 ms, that a reading may cover. Over a
+/// single tick a core is either idle or busy, which would show as 0 or 100.
+const MIN_TICKS: u64 = 50;
+
+/// How far each new reading pulls the figure shown, so a one-second burst
+/// does not flash a core to 100.
+const SMOOTHING: f32 = 0.5;
+
 /// Turns successive `/proc/stat` readings into per-core use.
 #[derive(Default)]
 pub struct Sampler {
@@ -89,9 +97,31 @@ pub struct Sampler {
 impl Sampler {
     pub fn push(&mut self, stat: &str) {
         let now = parse_stat(stat);
-        if !self.previous.is_empty() {
-            self.cores = usage(&self.previous, &now);
+        if self.previous.is_empty() {
+            self.previous = now;
+            return;
         }
+        let span = now
+            .iter()
+            .zip(&self.previous)
+            .map(|(n, p)| n.total.saturating_sub(p.total))
+            .max()
+            .unwrap_or(0);
+        if span < MIN_TICKS && now.len() == self.previous.len() {
+            // Keep the older reading as the baseline until enough time has
+            // passed for the difference to mean something.
+            return;
+        }
+        let raw = usage(&self.previous, &now);
+        self.cores = if self.cores.len() == raw.len() {
+            self.cores
+                .iter()
+                .zip(&raw)
+                .map(|(shown, new)| shown + SMOOTHING * (new - shown))
+                .collect()
+        } else {
+            raw
+        };
         self.previous = now;
     }
 
@@ -214,5 +244,27 @@ mod tests {
         assert_eq!(s.cores().len(), 2);
         assert!(s.cores()[0] > 0.99);
         assert_eq!(s.cores()[1], 0.0);
+    }
+
+    #[test]
+    fn a_reading_too_soon_after_the_last_is_ignored() {
+        let mut s = Sampler::default();
+        s.push("cpu0 0 0 0 0 0 0 0 0\n");
+        // Five ticks, every one busy: far too short to mean anything.
+        s.push("cpu0 5 0 0 0 0 0 0 0\n");
+        assert!(s.cores().is_empty());
+        // A hundred ticks since the first reading, five of them busy.
+        s.push("cpu0 5 0 0 95 0 0 0 0\n");
+        assert!((s.cores()[0] - 0.05).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_spike_is_smoothed() {
+        let mut s = Sampler::default();
+        s.push("cpu0 0 0 0 0 0 0 0 0\n");
+        s.push("cpu0 100 0 0 0 0 0 0 0\n");
+        assert_eq!(s.cores(), [1.0]);
+        s.push("cpu0 100 0 0 100 0 0 0 0\n");
+        assert_eq!(s.cores(), [0.5]);
     }
 }

@@ -132,7 +132,8 @@ impl Sweep {
             Phase::Idle | Phase::Applying => return Action::Wait,
             _ => {}
         }
-        if snap.driving != Driving::Interface {
+        let settling = matches!(self.phase, Phase::Settling { .. });
+        if snap.driving != Driving::Interface && !settling {
             return self.finish(Action::Abort(
                 "The interface stopped driving the graph.".into(),
             ));
@@ -415,12 +416,25 @@ mod tests {
         let mut s = sweep(&[256, 128]);
         s.start();
         s.applied(Ok(()));
-        assert_eq!(s.sample(&snap(0, 0, 0.1)), Action::Wait);
+        for _ in 0..SETTLE_SECS {
+            assert_eq!(s.sample(&snap(0, 0, 0.1)), Action::Wait);
+        }
         assert_eq!(
             s.sample(&idle()),
             Action::Abort("The interface stopped driving the graph.".into())
         );
         assert!(s.steps().is_empty());
+    }
+
+    #[test]
+    fn the_stream_reopening_while_settling_is_not_an_abort() {
+        let mut s = sweep(&[256, 128]);
+        s.start();
+        s.applied(Ok(()));
+        // A period or quantum change reopens the stream for a moment.
+        assert_eq!(s.sample(&idle()), Action::Wait);
+        assert_eq!(s.sample(&snap(0, 0, 0.1)), Action::Wait);
+        assert!(matches!(s.sample(&snap(0, 0, 0.1)), Action::Wait));
     }
 
     #[test]

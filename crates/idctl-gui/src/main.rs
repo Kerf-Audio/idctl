@@ -149,10 +149,9 @@ pub struct App {
 }
 
 impl App {
-    fn new() -> Self {
-        latency::recover();
+    fn new() -> (Self, Task<Message>) {
         let (tx, rx) = worker::spawn();
-        Self {
+        let mut app = Self {
             model: Model::default(),
             tx,
             rx,
@@ -169,7 +168,9 @@ impl App {
             confirm_phantom: None,
             rate_forced: false,
             latency: latency::State::default(),
-        }
+        };
+        let recovery = app.latency.recover().map(Message::Latency);
+        (app, recovery)
     }
 
     fn write(&mut self, addr: ParamAddr, data: Vec<u8>) {
@@ -196,11 +197,15 @@ impl App {
             idctl_audio::pw::release_rate();
         }
         if let Some(found) = self.latency.take_found() {
-            idctl_audio::pw::restore_blocking(
+            let back = idctl_audio::pw::restore_blocking(
                 found,
                 idctl_usb::VENDOR_ID,
                 idctl_usb::PRODUCT_ID_ID2_PLUS,
             );
+            // A restore that failed leaves the record for the next start.
+            if back {
+                self.latency.confirm_restored();
+            }
         }
         written
     }
@@ -282,8 +287,9 @@ fn update(app: &mut App, msg: Message) -> Task<Message> {
     match msg {
         Message::Tick => app.drain_events(),
         Message::Tab(t) => {
+            let opening = t == Tab::Latency && app.tab != Tab::Latency;
             app.tab = t;
-            if t == Tab::Latency {
+            if opening {
                 return latency_update(app, latency::Msg::Opened);
             }
         }
