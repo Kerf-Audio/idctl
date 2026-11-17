@@ -307,6 +307,10 @@ fn main() -> iced::Result {
                 views::layout::MIN_WIDTH,
                 views::layout::MIN_HEIGHT,
             )),
+            platform_specific: iced::window::settings::PlatformSpecific {
+                application_id: "id-mixer".to_string(),
+                ..Default::default()
+            },
             ..iced::window::Settings::default()
         })
         .run()
