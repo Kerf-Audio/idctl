@@ -23,7 +23,7 @@ const DSP_MAX_RATE: u32 = 96_000;
 const SEND_FLOOR_DB: f32 = -60.0;
 const SEND_MAX_DB: f32 = 6.0;
 
-/// Input modes in the order the arrows step through, with the value each sends.
+/// Input modes in display order, with the value each sends.
 const MODES: [(u8, &str); 3] = [(0, "Mode 1"), (1, "Mode 2"), (3, "Mode 3")];
 
 /// Sample rate the DSP coefficients are drawn at.
@@ -187,7 +187,7 @@ fn tone_key<'a>(label: &str, on: bool, msg: Message) -> button::Button<'a, Messa
     )
     .padding([6, 4])
     .width(Length::Fill)
-    .style(theme::key(on, p::LIT_TOP))
+    .style(theme::key(on, p::MIC))
     .on_press(msg)
 }
 
@@ -199,30 +199,21 @@ fn tone_card(m: &Model, ch: u8) -> Element<'_, Message> {
     let warm = m.flag(input::tone_a(ch)) && m.flag(input::tone_b(ch));
     let mode = m.byte(input::character(ch));
     let at = MODES.iter().position(|&(v, _)| v == mode).unwrap_or(0);
-    let step =
-        |delta: usize| Message::Byte(input::character(ch), MODES[(at + delta) % MODES.len()].0);
-    let arrow = |glyph: &str, msg| {
-        button(text(glyph.to_string()).size(9).color(p::SELECTOR))
-            .padding([4, 3])
-            .style(theme::flat)
-            .on_press(msg)
-    };
     let selector = container(
-        row![
-            arrow("\u{25c0}", step(MODES.len() - 1)),
-            container(
-                text(MODES[at].1.to_uppercase())
-                    .size(11)
-                    .font(BOLD)
-                    .color(p::SELECTOR)
-                    .wrapping(text::Wrapping::None),
+        row(MODES.iter().enumerate().map(|(i, &(value, name))| {
+            button(
+                container(text(name.trim_start_matches("Mode ")).size(11).font(BOLD))
+                    .center_x(Length::Fill),
             )
-            .center_x(Length::Fill),
-            arrow("\u{25b6}", step(1)),
-        ]
-        .align_y(Alignment::Center),
+            .padding([5, 0])
+            .width(Length::Fill)
+            .style(theme::segment(i == at, p::MIC))
+            .on_press(Message::Byte(input::character(ch), value))
+            .into()
+        }))
+        .spacing(2),
     )
-    .padding(1)
+    .padding(2)
     .style(theme::well);
     let body = column![
         tone_key("Warm", warm, Message::Warm(ch, !warm)),

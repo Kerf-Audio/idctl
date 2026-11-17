@@ -1,21 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#3a3d41"/>
-      <stop offset="1" stop-color="#1f2124"/>
+      <stop offset="0" stop-color="#1b2430"/>
+      <stop offset="1" stop-color="#0a0e13"/>
     </linearGradient>
-    <linearGradient id="arc" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#3aa0ff"/>
-      <stop offset="1" stop-color="#7cc4ff"/>
+    <linearGradient id="d" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#36d6e7"/>
+      <stop offset="1" stop-color="#b79cff"/>
     </linearGradient>
   </defs>
   <rect x="8" y="8" width="240" height="240" rx="52" fill="url(#bg)"/>
-  <rect x="8.5" y="8.5" width="239" height="239" rx="51.5" fill="none" stroke="#ffffff" stroke-opacity="0.12"/>
-  <!-- i -->
-  <circle cx="84" cy="70" r="14" fill="#ff8fc9"/>
-  <rect x="70" y="102" width="28" height="92" rx="8" fill="#e8e8e8"/>
+  <rect x="8.5" y="8.5" width="239" height="239" rx="51.5" fill="none" stroke="#e6ebf2" stroke-opacity="0.12"/>
   <!-- D -->
-  <path d="M128 70 H160 A60 62 0 0 1 160 194 H128 Z M156 98 V166 H160 A32 34 0 0 0 160 98 Z"
-        fill="url(#arc)" fill-rule="evenodd"/>
-  <rect x="60" y="214" width="136" height="6" rx="3" fill="#1fb28a"/>
+  <path transform="translate(-58 0)"
+        d="M128 70 H160 A60 62 0 0 1 160 194 H128 Z M156 98 V166 H160 A32 34 0 0 0 160 98 Z"
+        fill="url(#d)" fill-rule="evenodd"/>
+  <!-- + -->
+  <rect x="172" y="124" width="52" height="16" rx="8" fill="#f5b942"/>
+  <rect x="190" y="106" width="16" height="52" rx="8" fill="#f5b942"/>
 </svg>

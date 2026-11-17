@@ -12,7 +12,7 @@ pub mod palette {
     pub const STRIP: Color = color!(0x151c25);
     pub const STRIP_LINE: Color = color!(0x263241);
     pub const SECTION: Color = color!(0x1b2430);
-    pub const BUTTON_TOP: Color = color!(0x222d3b);
+    pub const BUTTON_TOP: Color = color!(0x1b2430);
     pub const BUTTON_BOTTOM: Color = color!(0x1b2430);
     pub const LIT_TOP: Color = color!(0xf5b942);
     pub const TEXT: Color = color!(0xe6ebf2);
@@ -92,43 +92,50 @@ fn lighten(c: Color, by: f32) -> Color {
     )
 }
 
-/// Hardware-style key. `lit` keys fill with `accent` (amber for selectors).
+/// Flat key: outlined and quiet, filled with `accent` and bold when lit.
 pub fn key(lit: bool, accent: Color) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |_, status| {
         let hover = if matches!(status, button::Status::Hovered) {
-            0.06
+            0.08
         } else {
             0.0
         };
         let pressed = matches!(status, button::Status::Pressed);
-        let (top, bottom, text_color) = if lit {
-            (lighten(accent, 0.12 + hover), accent, p::DARK_TEXT)
+        let fill = if lit {
+            lighten(accent, hover)
+        } else if pressed {
+            p::STRIP_LINE
         } else {
-            (
-                lighten(p::BUTTON_TOP, hover),
-                lighten(p::BUTTON_BOTTOM, hover),
-                p::TEXT,
-            )
-        };
-        let (top, bottom) = if pressed {
-            (bottom, top)
-        } else {
-            (top, bottom)
+            lighten(p::BUTTON_BOTTOM, hover)
         };
         button::Style {
-            background: Some(vertical(top, bottom)),
-            text_color,
+            background: Some(fill.into()),
+            text_color: if lit { p::DARK_TEXT } else { p::MUTED },
             border: Border {
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.45),
+                color: if lit { fill } else { p::STRIP_LINE },
                 width: 1.0,
-                radius: 4.0.into(),
+                radius: 6.0.into(),
             },
-            shadow: Shadow {
-                color: Color::from_rgba(0.0, 0.0, 0.0, if pressed { 0.0 } else { 0.4 }),
-                offset: Vector::new(0.0, 1.5),
-                blur_radius: 2.0,
+            ..button::Style::default()
+        }
+    }
+}
+
+/// One choice in a segmented switch inside a `well`.
+pub fn segment(on: bool, accent: Color) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_, status| {
+        let hover = matches!(status, button::Status::Hovered) && !on;
+        button::Style {
+            background: on.then(|| accent.into()),
+            text_color: if on {
+                p::DARK_TEXT
+            } else if hover {
+                p::TEXT
+            } else {
+                p::MUTED
             },
-            snap: true,
+            border: border::rounded(4),
+            ..button::Style::default()
         }
     }
 }
@@ -208,9 +215,7 @@ pub fn strip(_: &Theme) -> container::Style {
 pub fn card(_: &Theme) -> container::Style {
     container::Style {
         background: Some(p::SECTION.into()),
-        border: border::rounded(4)
-            .color(Color::from_rgba(0.0, 0.0, 0.0, 0.3))
-            .width(1),
+        border: border::rounded(8).color(p::STRIP_LINE).width(1),
         ..container::Style::default()
     }
 }
@@ -278,9 +283,7 @@ pub fn menu(_: &Theme) -> iced::overlay::menu::Style {
 pub fn well(_: &Theme) -> container::Style {
     container::Style {
         background: Some(Color::from_rgb8(0x0a, 0x0e, 0x13).into()),
-        border: border::rounded(6)
-            .color(Color::from_rgba(1.0, 1.0, 1.0, 0.12))
-            .width(1),
+        border: border::rounded(6).color(p::STRIP_LINE).width(1),
         ..container::Style::default()
     }
 }

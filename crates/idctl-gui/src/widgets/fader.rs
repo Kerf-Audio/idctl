@@ -11,7 +11,7 @@ use iced::widget::text::Alignment;
 use iced::widget::Action;
 use iced::{Color, Element, Length, Point, Rectangle, Renderer, Size, Theme};
 
-use super::{mix_colour, Scale};
+use super::Scale;
 use crate::mix::OFF_DB;
 use crate::theme::{palette as p, SEMIBOLD};
 
@@ -40,6 +40,8 @@ const METER_FLOOR: f32 = -60.0;
 
 const DOUBLE_CLICK: Duration = Duration::from_millis(350);
 const CAP: Size = Size::new(30.0, 20.0);
+const BLOCK: f32 = 5.0;
+const BLOCK_PITCH: f32 = 7.0;
 const PAD_TOP: f32 = 18.0;
 const PAD_BOTTOM: f32 = 22.0;
 
@@ -231,19 +233,19 @@ impl<Message> canvas::Program<Message> for Fader<'_, Message> {
             let slot = Rectangle::new(Point::new(x, y_at(0.0)), Size::new(bar_w, travel));
             frame.fill_rectangle(slot.position(), slot.size(), p::STRIP);
             let f = meter_fraction(*level);
-            let h = f * travel;
-            let segments = (h / 2.0).ceil() as usize;
-            for s in 0..segments {
-                let y0 = y_at(1.0) - (s as f32 + 1.0) * 2.0;
+            // Blocks of 5 px with a 2 px gap, lit up to the level.
+            let blocks = ((f * travel) / BLOCK_PITCH).floor() as usize;
+            for s in 0..blocks {
+                let y0 = y_at(1.0) - (s as f32 + 1.0) * BLOCK_PITCH + (BLOCK_PITCH - BLOCK);
                 let frac = 1.0 - (y0 - top) / travel;
                 let colour = if frac > 0.9 {
                     p::METER_HIGH
                 } else if frac > 0.72 {
-                    mix_colour(p::METER_MID, p::METER_HIGH, (frac - 0.72) / 0.18)
+                    p::METER_MID
                 } else {
-                    mix_colour(p::METER_LOW, p::METER_MID, frac / 0.72)
+                    p::METER_LOW
                 };
-                frame.fill_rectangle(Point::new(x, y0.max(top)), Size::new(bar_w, 1.6), colour);
+                frame.fill_rectangle(Point::new(x, y0), Size::new(bar_w, BLOCK), colour);
             }
         }
         let scale_x = bars_x + bars * (bar_w + 2.0) + 9.0;
