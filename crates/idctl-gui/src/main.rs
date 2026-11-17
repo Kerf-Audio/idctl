@@ -5,6 +5,7 @@ mod latency;
 mod mix;
 mod model;
 mod routing;
+mod state;
 mod talkback;
 mod theme;
 mod views;
@@ -149,6 +150,7 @@ pub struct App {
 
 impl App {
     fn new() -> Self {
+        latency::recover();
         let (tx, rx) = worker::spawn();
         Self {
             model: Model::default(),
@@ -192,6 +194,13 @@ impl App {
             && ack_rx.recv_timeout(Duration::from_secs(1)) == Ok(true);
         if self.rate_forced {
             idctl_audio::pw::release_rate();
+        }
+        if let Some(found) = self.latency.take_found() {
+            idctl_audio::pw::restore_blocking(
+                found,
+                idctl_usb::VENDOR_ID,
+                idctl_usb::PRODUCT_ID_ID2_PLUS,
+            );
         }
         written
     }

@@ -23,10 +23,7 @@ pub struct Talkback {
 /// Where the held sends are kept while talking: the unit keeps the talkback
 /// levels if we die before restoring, and would pass them off as the user's.
 fn state_path() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_STATE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")))?;
-    Some(base.join("id-mixer").join("talkback"))
+    crate::state::path("talkback")
 }
 
 fn encode((node, saved): &Saved) -> String {

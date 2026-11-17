@@ -205,14 +205,6 @@ fn trim_khz(hz: u32) -> String {
     }
 }
 
-/// A titled panel on the Settings and Latency pages.
-fn card<'a>(title: &str, body: Element<'a, Message>) -> Element<'a, Message> {
-    container(column![caption(title, 12.0, p::TEXT), body].spacing(18))
-        .padding(20)
-        .style(theme::card)
-        .into()
-}
-
 /// A hardware-style key with a tracked caption.
 fn key<'a>(label: &str, lit: bool, accent: Color, msg: Message) -> button::Button<'a, Message> {
     button(
