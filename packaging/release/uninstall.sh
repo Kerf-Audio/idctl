@@ -5,14 +5,14 @@ set -eu
 prefix=${PREFIX:-$HOME/.local}
 
 rm -f "$prefix/bin/idctl-gui" \
-    "$prefix/share/applications/id-mixer.desktop" \
-    "$prefix/share/icons/hicolor/scalable/apps/id-mixer.svg"
+    "$prefix/share/applications/dplus-control.desktop" \
+    "$prefix/share/icons/hicolor/scalable/apps/dplus-control.svg"
 for size in 48 128 256; do
-    rm -f "$prefix/share/icons/hicolor/${size}x${size}/apps/id-mixer.png"
+    rm -f "$prefix/share/icons/hicolor/${size}x${size}/apps/dplus-control.png"
 done
 gtk-update-icon-cache -q -t "$prefix/share/icons/hicolor" 2>/dev/null || true
 update-desktop-database "$prefix/share/applications" 2>/dev/null || true
-echo "Removed iD Mixer from $prefix"
+echo "Removed D+ Control from $prefix"
 
 if [ "${1:-}" = "--udev" ]; then
     sudo rm -f /etc/udev/rules.d/70-id2plus.rules

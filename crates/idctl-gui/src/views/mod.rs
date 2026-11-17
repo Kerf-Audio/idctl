@@ -121,7 +121,7 @@ fn top_bar(app: &App) -> Element<'_, Message> {
     };
     container(
         row![
-            container(text("iD Mixer").size(22).font(BOLD).color(p::TEXT)).width(Length::Fill),
+            container(text("D+ Control").size(22).font(BOLD).color(p::TEXT)).width(Length::Fill),
             container(status)
                 .width(Length::Fill)
                 .align_x(Alignment::End),

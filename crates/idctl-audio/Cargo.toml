@@ -1,6 +1,6 @@
 [package]
 name = "idctl-audio"
-description = "PipeWire monitoring and buffer tuning for iD Mixer"
+description = "PipeWire monitoring and buffer tuning for D+ Control"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

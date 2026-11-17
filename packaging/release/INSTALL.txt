@@ -1,4 +1,4 @@
-iD Mixer: a free, open-source control app for the Audient iD2+ on Linux.
+D+ Control: a free, open-source control app for the Audient iD2+ on Linux.
 
 This is an independent project, not made, endorsed or supported by Audient.
 Audient and iD are trademarks of Audient Ltd. It comes with no warranty.
@@ -11,7 +11,7 @@ That puts the app, its icon and an app-list entry under ~/.local, and
 installs a udev rule so your user can open the interface without root.
 Replug the interface afterwards. Without --udev only the app is installed.
 
-Make sure ~/.local/bin is on your PATH, then start "iD Mixer" from your app
+Make sure ~/.local/bin is on your PATH, then start "D+ Control" from your app
 list or run idctl-gui. To install somewhere else: PREFIX=/usr/local ./install.sh
 
 REQUIREMENTS

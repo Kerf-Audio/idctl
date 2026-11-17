@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a Latency tab to iD Mixer that shows xruns and load split between the interface and each app, changes buffer settings safely, runs a repeatable test, and reports system settings.
+**Goal:** Add a Latency tab to D+ Control that shows xruns and load split between the interface and each app, changes buffer settings safely, runs a repeatable test, and reports system settings.
 
 **Architecture:** A new crate `idctl-audio` holds everything that is not GUI: pure parsers, statistics, the test-run state machine, profile and config-file text, system checks, and one module (`pw`) that spawns PipeWire's command-line tools. `idctl-gui` gains a `latency` state module and a `views/latency.rs` page fed by a subscription that runs only while the page is open or a test runs.
 
@@ -18,7 +18,7 @@
 - Nothing scripted writes to PipeWire or the device outside Tasks 6 and 16, which Danny runs or watches.
 - Commits: subject starts `Latency: `. Author Danny Wincott. No AI or assistant names, trailers or co-author lines anywhere, in commits or code.
 - Public repository: no machine-specific paths, user names or serial numbers in code, fixtures or defaults. Replace the serial in captured fixture node names with `00-00-0000-0000-00`. The vendor's brand name stays out of code and docs; the node-name fixtures are the one place it appears, as PipeWire reports it.
-- Files the app may create or delete: `$XDG_CONFIG_HOME/id-mixer/latency.toml`, `$XDG_STATE_HOME/id-mixer/latency`, `$XDG_CONFIG_HOME/wireplumber/wireplumber.conf.d/50-id-mixer-latency.conf`, `$XDG_CONFIG_HOME/pipewire/pipewire.conf.d/50-id-mixer-latency.conf`. No others.
+- Files the app may create or delete: `$XDG_CONFIG_HOME/dplus-control/latency.toml`, `$XDG_STATE_HOME/dplus-control/latency`, `$XDG_CONFIG_HOME/wireplumber/wireplumber.conf.d/50-dplus-control-latency.conf`, `$XDG_CONFIG_HOME/pipewire/pipewire.conf.d/50-dplus-control-latency.conf`. No others.
 - Accepted ranges: buffer a power of two from 16 to 8192 frames, period 16 to 1024, headroom 0 to 1024.
 - One file, one job; split a file that passes about 500 lines. Match the existing code's style (see `talkback.rs`, `clock.rs`, `views/settings.rs`).
 
@@ -293,7 +293,7 @@ Commands: quantum `pw-metadata -n settings 0 clock.force-quantum <N>` (0 lifts).
 - Produces:
   ```rust
   // state.rs
-  pub fn path(name: &str) -> Option<PathBuf>;   // $XDG_STATE_HOME/id-mixer/<name>, falling back to ~/.local/state
+  pub fn path(name: &str) -> Option<PathBuf>;   // $XDG_STATE_HOME/dplus-control/<name>, falling back to ~/.local/state
   // latency.rs additions
   pub enum Msg { /* ... */ Apply(Tuning), Applied(Result<(), String>), Off, Restored(Result<(), String>) }
   impl State {
@@ -340,7 +340,7 @@ Behaviour: the first `Apply` in a session calls `pw::find`, stores the `Found` i
   pub fn machine(cpuinfo: &str) -> String;
   ```
 
-All types derive `Serialize`, `Deserialize`, `Clone`, `PartialEq`, `Debug`. `parse` refuses, with a message a user can act on: text over `MAX_BYTES`; a `version` other than 1 (`This profile is version {n}; this iD Mixer reads version 1.`); any mode failing `tuning::validate`; `hold_secs` not 10, 20 or 60; more than `MAX_RUNS` runs is truncated, not refused.
+All types derive `Serialize`, `Deserialize`, `Clone`, `PartialEq`, `Debug`. `parse` refuses, with a message a user can act on: text over `MAX_BYTES`; a `version` other than 1 (`This profile is version {n}; this D+ Control reads version 1.`); any mode failing `tuning::validate`; `hold_secs` not 10, 20 or 60; more than `MAX_RUNS` runs is truncated, not refused.
 
 - [ ] **Step 1: Write failing tests:** `round_trips`; `new_profile_uses_the_defaults`; `refuses_other_versions`; `refuses_out_of_range_modes` (non-power-of-two buffer, period 4); `refuses_oversize_text`; `refuses_wrong_shape` (valid TOML with `modes = "fast"`); `untested_when_the_cpu_differs`; `keeps_the_last_ten_runs`; `machine_reads_model_name`.
 - [ ] **Step 2: Run**, FAIL. **Step 3: Implement.** **Step 4: Run**, PASS, fmt, clippy.
@@ -355,7 +355,7 @@ All types derive `Serialize`, `Deserialize`, `Clone`, `PartialEq`, `Debug`. `par
 **Interfaces:**
 - Produces:
   ```rust
-  pub const FILE: &str = "50-id-mixer-latency.conf";
+  pub const FILE: &str = "50-dplus-control-latency.conf";
   pub fn wireplumber_conf(node_names: &[String], period: u32, headroom: u32) -> String;
   pub fn pipewire_conf(quantum: u32) -> String;
   /// Other files that set period or headroom for this device. Pure: (path, contents) in.
@@ -365,7 +365,7 @@ All types derive `Serialize`, `Deserialize`, `Clone`, `PartialEq`, `Debug`. `par
   pub fn kept(config_home: &Path) -> bool;
   ```
 
-`wireplumber_conf` emits a `monitor.alsa.rules` block with one `matches` entry per node name (exact `node.name`, each name escaped for the config syntax) and `update-props` for `api.alsa.period-size` and `api.alsa.headroom`. `pipewire_conf` emits `context.properties` with `default.clock.quantum = N` and `default.clock.min-quantum = min(N, 32)`. Both files start with a comment: `# Written by iD Mixer (Latency page). Revert removes this file.` A `Tuning` with `period` or `headroom` `None` writes only the PipeWire file. `conflicts` reports a file, other than `FILE`, whose text contains `api.alsa.period-size` or `api.alsa.headroom` and also a match pattern that covers the device (contains the device's serial-free name stem, for example `iD2`).
+`wireplumber_conf` emits a `monitor.alsa.rules` block with one `matches` entry per node name (exact `node.name`, each name escaped for the config syntax) and `update-props` for `api.alsa.period-size` and `api.alsa.headroom`. `pipewire_conf` emits `context.properties` with `default.clock.quantum = N` and `default.clock.min-quantum = min(N, 32)`. Both files start with a comment: `# Written by D+ Control (Latency page). Revert removes this file.` A `Tuning` with `period` or `headroom` `None` writes only the PipeWire file. `conflicts` reports a file, other than `FILE`, whose text contains `api.alsa.period-size` or `api.alsa.headroom` and also a match pattern that covers the device (contains the device's serial-free name stem, for example `iD2`).
 
 - [ ] **Step 1: Write failing tests:** `wireplumber_text_names_each_node`; `node_names_are_escaped` (a name containing `"`); `pipewire_text_lowers_the_minimum_only_when_needed` (16 gives min 16, 128 gives min 32); `finds_a_conflicting_rule` and `ignores_rules_for_other_cards`; `write_then_remove_leaves_nothing` and `remove_twice_is_fine` (under a unique temp directory); `remove_never_touches_other_files` (a sibling `99-x.conf` survives).
 - [ ] **Step 2: Run**, FAIL. **Step 3: Implement.** **Step 4: Run**, PASS, fmt, clippy.
@@ -381,12 +381,12 @@ All types derive `Serialize`, `Deserialize`, `Clone`, `PartialEq`, `Debug`. `par
 - Consumes: Tasks 7 to 11.
 - Produces: `Msg` variants `Mode(Mode)`, `Advanced(bool)`, `Edit(Tuning)`, `Keep`, `Revert`, `Export`, `Import`, `Imported(Result<Profile, String>)`, `Exported(Result<(), String>)`; `State.profile: Profile`.
 
-Behaviour: the active profile is loaded from `$XDG_CONFIG_HOME/id-mixer/latency.toml` at start (missing: `Profile::new`; unreadable: defaults in memory, the reason shown, the file left alone) and saved when a mode is chosen or edited. Mode keys: `Off`, `Safe`, `Balanced`, `Aggressive`. `Advanced` reveals three steppers for the selected mode's values; an edit validates, saves to the profile, and applies if that mode is on. `Keep` calls `keep::write` with the mode in force; `Revert to system` does `Off`, then `keep::remove`. Import reads through `Profile::parse`, replaces the active profile only on success, and never applies anything. If Task 6 found that a buffer change pops, `Apply` mutes the monitor output through the existing worker write path before the change and restores the previous mute state after `Applied`.
+Behaviour: the active profile is loaded from `$XDG_CONFIG_HOME/dplus-control/latency.toml` at start (missing: `Profile::new`; unreadable: defaults in memory, the reason shown, the file left alone) and saved when a mode is chosen or edited. Mode keys: `Off`, `Safe`, `Balanced`, `Aggressive`. `Advanced` reveals three steppers for the selected mode's values; an edit validates, saves to the profile, and applies if that mode is on. `Keep` calls `keep::write` with the mode in force; `Revert to system` does `Off`, then `keep::remove`. Import reads through `Profile::parse`, replaces the active profile only on success, and never applies anything. If Task 6 found that a buffer change pops, `Apply` mutes the monitor output through the existing worker write path before the change and restores the previous mute state after `Applied`.
 
 Exact copy:
 - beside the mode keys: `While a mode is on, it sets the buffer for every app, including your DAW's own setting.`
 - untested profile: `This profile came from a different computer. Run a test before trusting it.`
-- kept: `Kept: these settings hold without iD Mixer running. They apply fully after PipeWire restarts.`
+- kept: `Kept: these settings hold without D+ Control running. They apply fully after PipeWire restarts.`
 - conflict: `{path} also sets period or headroom for this interface. Whichever file sorts later wins.`
 
 - [ ] **Step 1: Write failing tests** in `latency.rs`: `choosing_a_mode_applies_its_tuning_and_saves_it`; `off_restores` ; `an_invalid_edit_changes_nothing`; `import_replaces_the_profile_but_applies_nothing`; `a_refused_import_keeps_the_active_profile`; `unreadable_profile_file_is_left_alone`.

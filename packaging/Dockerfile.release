@@ -1,4 +1,4 @@
-# Builds iD Mixer on Debian 12 so the binary needs only glibc 2.35, and runs
+# Builds D+ Control on Debian 12 so the binary needs only glibc 2.35, and runs
 # on that and anything newer. Used by packaging/build-release.sh.
 FROM debian:bookworm-slim
 

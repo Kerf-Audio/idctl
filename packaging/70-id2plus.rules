@@ -1,2 +1,2 @@
-# Let the logged-in user open the iD2+ for iD Mixer.
+# Let the logged-in user open the iD2+ for D+ Control.
 SUBSYSTEM=="usb", ATTR{idVendor}=="2708", ATTR{idProduct}=="0016", TAG+="uaccess"

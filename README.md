@@ -1,6 +1,6 @@
-<p align="center"><img src="docs/images/icon.png" alt="iD Mixer icon" width="128"></p>
+<p align="center"><img src="docs/images/icon.png" alt="D+ Control icon" width="128"></p>
 
-# iD Mixer
+# D+ Control
 
 A free, open-source control app for the Audient iD2+ audio interface on
 Linux. It gives you the monitor controller, preamps, tone, the mixer and
@@ -141,7 +141,7 @@ Replug the interface after installing the rule.
 
 ### Run it
 
-Start **iD Mixer** from your app list, or run `idctl-gui`. The corner of the
+Start **D+ Control** from your app list, or run `idctl-gui`. The corner of the
 window says when the iD2+ is connected.
 
 ## Known issues

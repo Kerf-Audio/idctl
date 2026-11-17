@@ -1,4 +1,4 @@
-//! iD Mixer: Linux control panel for the iD2+ audio interface.
+//! D+ Control: Linux control panel for the iD2+ audio interface.
 
 mod channel_dsp;
 mod latency;
@@ -450,7 +450,7 @@ fn main() -> iced::Result {
     iced::application(App::new, update, view)
         .subscription(subscription)
         .theme(|_: &App| theme::theme())
-        .title("iD Mixer")
+        .title("D+ Control")
         .window(iced::window::Settings {
             size: Size::new(views::layout::DEFAULT_WIDTH, views::layout::DEFAULT_HEIGHT),
             min_size: Some(Size::new(
@@ -458,7 +458,7 @@ fn main() -> iced::Result {
                 views::layout::MIN_HEIGHT,
             )),
             platform_specific: iced::window::settings::PlatformSpecific {
-                application_id: "id-mixer".to_string(),
+                application_id: "dplus-control".to_string(),
                 ..Default::default()
             },
             exit_on_close_request: false,

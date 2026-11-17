@@ -36,10 +36,10 @@ impl Profile {
             return Err("That text is too large to be a profile.".into());
         }
         let profile: Profile = serde_json::from_str(text)
-            .map_err(|_| "That text is not an iD Mixer profile.".to_owned())?;
+            .map_err(|_| "That text is not an D+ Control profile.".to_owned())?;
         if profile.version != VERSION {
             return Err(format!(
-                "This profile is version {}; this iD Mixer reads version {VERSION}.",
+                "This profile is version {}; this D+ Control reads version {VERSION}.",
                 profile.version
             ));
         }
@@ -126,7 +126,7 @@ mod tests {
             .replace("\"version\": 1", "\"version\": 2");
         assert_eq!(
             Profile::parse(&text),
-            Err("This profile is version 2; this iD Mixer reads version 1.".into())
+            Err("This profile is version 2; this D+ Control reads version 1.".into())
         );
     }
 

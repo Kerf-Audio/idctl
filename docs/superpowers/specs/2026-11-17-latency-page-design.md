@@ -7,11 +7,11 @@
 People using an iD2+ on Linux want to run small buffers without clicks. Today
 they have no way to see where a glitch comes from (the interface, the system or
 the application), and tuning means hand-editing PipeWire and WirePlumber files
-and guessing. iD Mixer gets a **Latency** page that shows what is happening,
+and guessing. D+ Control gets a **Latency** page that shows what is happening,
 lets the user change the buffer settings safely, and runs a repeatable test
 that finds the lowest setting their machine holds cleanly.
 
-It is for any iD Mixer user, not one machine. Everything it changes is
+It is for any D+ Control user, not one machine. Everything it changes is
 per-user, visible and revertible.
 
 ## Goals
@@ -133,7 +133,7 @@ A fourth tab, **Latency**, after Mixer, Routing and Settings.
   missed deadline.
 - **Revert to system** lifts every force and removes the app's own
   configuration file, returning PipeWire to whatever it would do without
-  iD Mixer.
+  D+ Control.
 
 **Who gets the blame.** "Interface" is the iD2+'s playback and capture nodes
 added together. "Apps" is every other node in the graph the iD2+ is driving,
@@ -197,7 +197,7 @@ definitions, the mode in use, the hold time, and the summary of the test run
 they came from (date, kernel, PipeWire version, CPU model, the result table).
 It holds no paths, user names or serial numbers.
 
-- The active profile lives at `$XDG_CONFIG_HOME/id-mixer/latency.toml`. The
+- The active profile lives at `$XDG_CONFIG_HOME/dplus-control/latency.toml`. The
   app reads it at start and writes it when a mode changes or a test finishes.
   A hand edit is picked up on the next start.
 - **Export** saves the active profile to a file the user chooses. **Import**
@@ -217,7 +217,7 @@ is refused with the reason shown; the active profile is left as it was.
 **Session versus kept.** A change applies for the session only: it is lifted
 when the app exits, as the forced sample rate is. **Keep** writes one
 WirePlumber drop-in owned by the app
-(`$XDG_CONFIG_HOME/wireplumber/wireplumber.conf.d/50-id-mixer-latency.conf`)
+(`$XDG_CONFIG_HOME/wireplumber/wireplumber.conf.d/50-dplus-control-latency.conf`)
 holding the period and headroom, and one PipeWire drop-in for the default
 quantum, so the settings hold without the app running. Revert deletes those
 two files and nothing else. If another file already sets the same properties
@@ -225,7 +225,7 @@ for the interface, the page names it and says its values win or lose by file
 order; it does not touch it.
 
 **Crash safety.** While a force is active, the app records it in
-`$XDG_STATE_HOME/id-mixer/latency` (the talkback restore file is the model).
+`$XDG_STATE_HOME/dplus-control/latency` (the talkback restore file is the model).
 The record holds the values found before the change. On the next start a
 leftover record means the app died: those values are written back before
 anything else.

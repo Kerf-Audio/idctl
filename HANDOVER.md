@@ -1,6 +1,6 @@
 # Handover
 
-State of iD Mixer at commit `03a410b` plus this handover (branch
+State of D+ Control at commit `03a410b` plus this handover (branch
 `latency/page`; `main` and release `v0.1.0` on GitHub are at `03a410b`).
 Updated 17 Nov 2026.
 
@@ -39,7 +39,7 @@ Design `docs/superpowers/specs/2026-11-17-latency-page-design.md`, plan
   (test-run state machine, not wired up), `profile` (copy and paste JSON).
 - GUI `latency.rs` and `views/latency.rs`. Buffer keys Off/32/64/128/256. Off
   hands the buffer back. What was found is written to
-  `$XDG_STATE_HOME/id-mixer/latency` before forcing, put back on Off, on close
+  `$XDG_STATE_HOME/dplus-control/latency` before forcing, put back on Off, on close
   (record kept if the restore fails) and on the next start (background task).
   Presets are kept in `.../profile.json`. Copy and Paste profile use the
   clipboard.

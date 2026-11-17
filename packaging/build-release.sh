@@ -39,11 +39,11 @@ case $need in GLIBC_2.3[0-6] | GLIBC_2.[0-2]*) ;; *) echo "too new for Debian 12
 stage="$work/$name"
 mkdir -p "$stage/icons"
 install -m755 "$work/idctl-gui" "$stage/idctl-gui"
-install -m644 packaging/id-mixer.desktop packaging/id-mixer.svg packaging/70-id2plus.rules LICENSE "$stage/"
+install -m644 packaging/dplus-control.desktop packaging/dplus-control.svg packaging/70-id2plus.rules LICENSE "$stage/"
 install -m755 packaging/release/install.sh packaging/release/uninstall.sh "$stage/"
 install -m644 packaging/release/INSTALL.txt "$stage/"
 for size in 48 128 256; do
-    rsvg-convert -w "$size" -h "$size" packaging/id-mixer.svg -o "$stage/icons/id-mixer-$size.png"
+    rsvg-convert -w "$size" -h "$size" packaging/dplus-control.svg -o "$stage/icons/dplus-control-$size.png"
 done
 
 mkdir -p dist

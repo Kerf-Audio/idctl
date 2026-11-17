@@ -1,6 +1,6 @@
 [package]
 name = "idctl-gui"
-description = "iD Mixer: Linux control panel for the iD2+"
+description = "D+ Control: Linux control panel for the iD2+"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -541,7 +541,10 @@ mod tests {
     fn record() -> PathBuf {
         static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        std::env::temp_dir().join(format!("id-mixer-latency-test-{}-{n}", std::process::id()))
+        std::env::temp_dir().join(format!(
+            "dplus-control-latency-test-{}-{n}",
+            std::process::id()
+        ))
     }
 
     fn found() -> Found {
