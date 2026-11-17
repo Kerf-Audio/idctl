@@ -10,6 +10,7 @@ use iced::{Subscription, Task};
 use idctl_audio::graph::{self, Interface};
 use idctl_audio::pw;
 use idctl_audio::stats::{Monitor, Snapshot};
+use idctl_audio::sysload::{self, Memory, Sampler};
 use idctl_audio::top::{Frames, Row};
 use idctl_audio::tuning::{self, Found, Presets, Tuning};
 use idctl_usb::{PRODUCT_ID_ID2_PLUS, VENDOR_ID};
@@ -51,6 +52,9 @@ pub struct State {
     pub down: bool,
     /// Unix seconds of the latest iteration.
     pub now: u64,
+    /// Busy share of each core, from `/proc/stat`.
+    pub sampler: Sampler,
+    pub memory: Option<Memory>,
     frames: Frames,
     monitor: Monitor,
     /// Nodes in the latest iteration; a change means the interface's nodes
@@ -99,6 +103,8 @@ impl State {
             interface: None,
             down: false,
             now: 0,
+            sampler: Sampler::default(),
+            memory: None,
             frames: Frames::default(),
             monitor: Monitor::new(Vec::new()),
             nodes: Vec::new(),
@@ -154,6 +160,8 @@ impl State {
                 self.down = false;
                 if let Some(rows) = self.frames.push(&line) {
                     self.now = now;
+                    self.sampler.sample();
+                    self.memory = sysload::memory();
                     self.snapshot = Some(self.monitor.frame(&rows, now));
                     return self.follow_nodes(&rows);
                 }

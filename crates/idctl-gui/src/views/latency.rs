@@ -8,6 +8,7 @@ use iced::{Alignment, Color, Element, Font, Length, Point, Rectangle, Renderer, 
 
 use idctl_audio::graph::Interface;
 use idctl_audio::stats::{buffer_ms, Driving, Party, Snapshot, HISTORY_SECS};
+use idctl_audio::sysload::Memory;
 use idctl_audio::tuning::{Tuning, BUFFERS};
 
 use super::{key, trim_khz};
@@ -31,6 +32,12 @@ const BAR: f32 = 240.0;
 const PERCENT: f32 = 76.0;
 const FLAG: f32 = 150.0;
 
+/// Threads per row of the CPU grid, and the width of each cell.
+const CORES_PER_ROW: usize = 8;
+const CORE_CELL: f32 = 96.0;
+const MEMORY_LABEL: f32 = 90.0;
+const MEMORY_AMOUNT: f32 = 150.0;
+
 const ABSENT: &str = "-";
 
 pub fn view(state: &State) -> Element<'_, Message> {
@@ -49,6 +56,7 @@ pub fn view(state: &State) -> Element<'_, Message> {
         column![
             buffer(state),
             tiles(state.interface.as_ref(), snapshot),
+            system(state),
             sources(state, snapshot),
             panel(
                 "Xruns per second, last 5 minutes",
@@ -389,7 +397,11 @@ fn source<'a>(who: &'a Party, now: u64) -> Element<'a, Message> {
         ))
         .push(cell(number(last, 12.0, p::MUTED), LAST, Alignment::End))
         .push(space().width(28))
-        .push(cell(bar(who.load), BAR, Alignment::Start))
+        .push(cell(
+            bar(who.load, BAR, if over { p::MUTE_ON } else { p::CLOCK }),
+            BAR,
+            Alignment::Start,
+        ))
         .push(cell(
             number(percent(who.load), 14.0, hot(over, p::CLOCK)),
             PERCENT,
@@ -404,17 +416,16 @@ fn source<'a>(who: &'a Party, now: u64) -> Element<'a, Message> {
         .into()
 }
 
-/// Share of the period spent processing; past 100 % the deadline is missed.
-fn bar<'a>(load: f32) -> Element<'a, Message> {
-    let filled = (load.clamp(0.0, 1.0) * 100.0).round() as u16;
-    let colour = if load >= 1.0 { p::MUTE_ON } else { p::CLOCK };
+/// A filled track `width` wide.
+fn bar<'a>(share: f32, width: f32, colour: Color) -> Element<'a, Message> {
+    let filled = (share.clamp(0.0, 1.0) * 100.0).round() as u16;
     let part = |portion: u16, colour: Color| {
         container(space())
             .width(Length::FillPortion(portion))
             .height(8)
             .style(theme::fill(colour))
     };
-    let mut track = Row::new().width(BAR);
+    let mut track = Row::new().width(width);
     if filled > 0 {
         track = track.push(part(filled, colour));
     }
@@ -422,6 +433,93 @@ fn bar<'a>(load: f32) -> Element<'a, Message> {
         track = track.push(part(100 - filled, p::CHROME));
     }
     track.into()
+}
+
+/// Calm, busy, or about to run out.
+fn heat(share: f32) -> Color {
+    match share {
+        s if s >= 0.9 => p::METER_HIGH,
+        s if s >= 0.7 => p::METER_MID,
+        _ => p::METER_LOW,
+    }
+}
+
+// --- System load -----------------------------------------------------------
+
+fn system(state: &State) -> Element<'_, Message> {
+    let cores = state.sampler.cores();
+    let body: Element<'_, Message> = if cores.is_empty() {
+        hint("Reading the CPU.")
+    } else {
+        let mut grid = column![].spacing(12);
+        for (n, chunk) in cores.chunks(CORES_PER_ROW).enumerate() {
+            let mut line = Row::new().spacing(12);
+            for (i, share) in chunk.iter().enumerate() {
+                line = line.push(core(n * CORES_PER_ROW + i, *share));
+            }
+            // Short last row: keep the cells where the rows above put them.
+            for _ in chunk.len()..CORES_PER_ROW {
+                line = line.push(space().width(CORE_CELL));
+            }
+            grid = grid.push(line);
+        }
+        column![grid, memory(state.memory)].spacing(18).into()
+    };
+    let threads = (!cores.is_empty()).then(|| {
+        text(format!("{} threads", cores.len()))
+            .size(12)
+            .color(p::MUTED)
+            .into()
+    });
+    panel("System load", threads, body)
+}
+
+fn core<'a>(index: usize, share: f32) -> Element<'a, Message> {
+    column![
+        row![
+            container(caption(&index.to_string(), 10.0, p::MUTED)).width(Length::Fill),
+            number(percent(share), 12.0, heat(share)),
+        ]
+        .align_y(Alignment::Center),
+        bar(share, CORE_CELL, heat(share)),
+    ]
+    .spacing(6)
+    .width(CORE_CELL)
+    .into()
+}
+
+fn gigabytes(bytes: u64) -> f64 {
+    bytes as f64 / (1024.0 * 1024.0 * 1024.0)
+}
+
+fn memory<'a>(memory: Option<Memory>) -> Element<'a, Message> {
+    let (share, amount) = match memory {
+        Some(m) => (
+            m.used_share(),
+            format!("{:.1} / {:.1} GB", gigabytes(m.used), gigabytes(m.total)),
+        ),
+        None => (0.0, ABSENT.to_owned()),
+    };
+    Row::new()
+        .push(cell(
+            caption("Memory", 10.0, p::MUTED),
+            MEMORY_LABEL,
+            Alignment::Start,
+        ))
+        .push(cell(bar(share, BAR, heat(share)), BAR, Alignment::Start))
+        .push(space().width(14))
+        .push(cell(
+            number(amount, 12.0, p::TEXT),
+            MEMORY_AMOUNT,
+            Alignment::End,
+        ))
+        .push(cell(
+            number(percent(share), 14.0, heat(share)),
+            PERCENT,
+            Alignment::End,
+        ))
+        .align_y(Alignment::Center)
+        .into()
 }
 
 fn ago(secs: u64) -> String {

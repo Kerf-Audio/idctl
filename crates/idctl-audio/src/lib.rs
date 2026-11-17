@@ -4,5 +4,7 @@
 pub mod graph;
 pub mod pw;
 pub mod stats;
+pub mod sweep;
+pub mod sysload;
 pub mod top;
 pub mod tuning;
