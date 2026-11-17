@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/images/icon.png" alt="iD Mixer icon" width="128"></p>
+
 # iD Mixer
 
 A free, open-source control app for the Audient iD2+ audio interface on
