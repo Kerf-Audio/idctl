@@ -19,13 +19,17 @@ const ECHO: Duration = Duration::from_millis(500);
 /// Passes in a row that may hit a transient USB error before the link counts
 /// as lost and the app reconnects.
 const MAX_STRIKES: u32 = 5;
+/// Extra attempts to land the queue when quitting, and the wait between them.
+const QUIT_RETRIES: u32 = 3;
+const QUIT_RETRY_WAIT: Duration = Duration::from_millis(50);
 
 pub enum Command {
     Write(ParamAddr, Vec<u8>),
     /// Memory write (coefficient blob); never read back.
     Mem(ParamAddr, Vec<u8>),
     /// Apply everything queued so far, confirm on the sender, stop the thread.
-    Quit(Sender<()>),
+    /// The reply is true when nothing was left unwritten.
+    Quit(Sender<bool>),
 }
 
 pub enum Event {
@@ -94,7 +98,7 @@ fn run(cmds: &Receiver<Command>, events: &Sender<Event>) {
         while let Some(left) = deadline.checked_duration_since(Instant::now()) {
             match cmds.recv_timeout(left) {
                 Ok(Command::Quit(ack)) => {
-                    let _ = ack.send(());
+                    let _ = ack.send(false);
                     return;
                 }
                 Ok(_) => {}
@@ -192,7 +196,7 @@ fn serve<D: Transport>(
     loop {
         let started = Instant::now();
         if let Some(ack) = pass(dev, &mut session, cmds, events)? {
-            let _ = ack.send(());
+            let _ = ack.send(session.queue.is_empty());
             return Ok(());
         }
         thread::sleep(POLL.saturating_sub(started.elapsed()));
@@ -206,7 +210,7 @@ fn pass<D: Transport>(
     s: &mut Session,
     cmds: &Receiver<Command>,
     events: &Sender<Event>,
-) -> Result<Option<Sender<()>>, Error> {
+) -> Result<Option<Sender<bool>>, Error> {
     let started = Instant::now();
     s.hit = false;
 
@@ -219,27 +223,18 @@ fn pass<D: Transport>(
         }
     }
 
-    // The device flags our own writes as changes, sometimes a few passes
-    // later. Reading them back mid-drag would pull the control to an older
-    // value, so anything written within the echo window is skipped.
-    let mut items = std::mem::take(&mut s.queue).into_iter();
-    while let Some(item) = items.next() {
-        let sent = match &item {
-            Item::Set(addr, data) => dev.set(*addr, data),
-            Item::Mem(addr, data) => dev.mem_write(*addr, data),
-        };
-        if s.soft(sent)?.is_none() {
-            // Keep this write and everything after it, in order.
-            s.queue.push(item);
-            s.queue.extend(items);
-            break;
-        }
-        if let Item::Set(addr, _) = item {
-            s.recent.insert(addr, started);
-        }
-    }
+    flush(dev, s, started)?;
     s.recent.retain(|_, at| started.duration_since(*at) < ECHO);
     if quit.is_some() {
+        // The last chance to land the queue: a transient hiccup now would
+        // otherwise lose writes such as the talkback restore.
+        for _ in 0..QUIT_RETRIES {
+            if s.queue.is_empty() {
+                break;
+            }
+            thread::sleep(QUIT_RETRY_WAIT);
+            flush(dev, s, Instant::now())?;
+        }
         return Ok(quit);
     }
 
@@ -277,6 +272,29 @@ fn pass<D: Transport>(
 
     s.strikes = if s.hit { s.strikes + 1 } else { 0 };
     Ok(None)
+}
+
+/// Apply the queue in order. The device flags our own writes as changes,
+/// sometimes a few passes later, and reading them back mid-drag would pull the
+/// control to an older value, so each write is stamped in `recent`. A transient
+/// failure keeps that write and everything after it, in order.
+fn flush<D: Transport>(dev: &D, s: &mut Session, at: Instant) -> Result<(), Error> {
+    let mut items = std::mem::take(&mut s.queue).into_iter();
+    while let Some(item) = items.next() {
+        let sent = match &item {
+            Item::Set(addr, data) => dev.set(*addr, data),
+            Item::Mem(addr, data) => dev.mem_write(*addr, data),
+        };
+        if s.soft(sent)?.is_none() {
+            s.queue.push(item);
+            s.queue.extend(items);
+            break;
+        }
+        if let Item::Set(addr, _) = item {
+            s.recent.insert(addr, at);
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -424,7 +442,19 @@ mod tests {
         tx.send(Command::Quit(ack_tx)).unwrap();
         let ack = pass(&dev, &mut s, &rx, &ev).unwrap().expect("quit");
         assert_eq!(sets(&dev), [format!("set {}=[1]", tag(A))]);
-        ack.send(()).unwrap();
-        assert!(ack_rx.try_recv().is_ok());
+        ack.send(s.queue.is_empty()).unwrap();
+        assert_eq!(ack_rx.try_recv(), Ok(true));
+    }
+
+    #[test]
+    fn quit_retries_a_write_that_hit_a_hiccup() {
+        let (dev, mut s, tx, rx, ev) = rig();
+        let (ack_tx, _ack_rx) = mpsc::channel();
+        dev.set_errors.borrow_mut().push_back(transient());
+        tx.send(Command::Write(A, vec![1])).unwrap();
+        tx.send(Command::Quit(ack_tx)).unwrap();
+        pass(&dev, &mut s, &rx, &ev).unwrap().expect("quit");
+        assert_eq!(sets(&dev), [format!("set {}=[1]", tag(A))]);
+        assert!(s.queue.is_empty());
     }
 }

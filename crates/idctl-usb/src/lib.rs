@@ -78,7 +78,7 @@ impl Device2Plus {
             }
             Direction::Out => {
                 let rt = request_type(rusb::Direction::Out, RequestType::Vendor, Recipient::Device);
-                self.handle.write_control(
+                let n = self.handle.write_control(
                     rt,
                     req.request,
                     req.value,
@@ -86,6 +86,12 @@ impl Device2Plus {
                     &req.data,
                     TIMEOUT,
                 )?;
+                if n < req.data.len() {
+                    return Err(Error::Short {
+                        wanted: req.data.len(),
+                        got: n,
+                    });
+                }
                 Ok(Vec::new())
             }
         }

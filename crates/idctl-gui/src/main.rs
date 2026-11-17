@@ -180,15 +180,15 @@ impl App {
     }
 
     /// Let the device thread apply what is queued and stop, and give the
-    /// PipeWire rate back if we forced it.
-    fn shutdown(&mut self) {
+    /// PipeWire rate back if we forced it. True when the queue was written.
+    fn shutdown(&mut self) -> bool {
         let (ack_tx, ack_rx) = std::sync::mpsc::channel();
-        if self.tx.send(Command::Quit(ack_tx)).is_ok() {
-            let _ = ack_rx.recv_timeout(Duration::from_secs(1));
-        }
+        let written = self.tx.send(Command::Quit(ack_tx)).is_ok()
+            && ack_rx.recv_timeout(Duration::from_secs(1)) == Ok(true);
         if self.rate_forced {
             clock::release();
         }
+        written
     }
 
     fn write_all(&mut self, writes: Writes) {
@@ -225,10 +225,14 @@ impl App {
                     self.offline = None;
                     self.model.mixer.reset_seen();
                 }
-                Event::Disconnected(why) => self.offline = Some(why),
+                Event::Disconnected(why) => {
+                    self.offline = Some(why);
+                    self.confirm_phantom = None;
+                }
                 Event::Param(addr, data) => self.model.apply(addr, data),
                 Event::Loaded => {
                     self.model.mixer.detect_links();
+                    self.talkback.resume();
                     let model = &self.model;
                     self.routing.detect(|slot| model.byte(output::source(slot)));
                 }
@@ -242,6 +246,17 @@ impl App {
         let on = self.model.talking();
         let writes = self.talkback.follow(&mut self.model.mixer, on);
         self.write_all(writes);
+        self.sync_talkback_file();
+    }
+
+    /// Keep the held talkback sends on disk while they are held. A release
+    /// only counts once the device was there to receive it.
+    fn sync_talkback_file(&mut self) {
+        match self.talkback.take_change() {
+            Some(Some(held)) => talkback::store(Some(&held)),
+            Some(None) if self.offline.is_none() => talkback::store(None),
+            _ => {}
+        }
     }
 }
 
@@ -315,7 +330,9 @@ fn update(app: &mut App, msg: Message) -> Task<Message> {
             // Put the talkback mic back before the device thread stops.
             let writes = app.talkback.follow(&mut app.model.mixer, false);
             app.write_all(writes);
-            app.shutdown();
+            if app.shutdown() {
+                app.sync_talkback_file();
+            }
             return iced::exit();
         }
         Message::Level(n, v) => app.mixer_edit(n, Edit::Level(v)),
