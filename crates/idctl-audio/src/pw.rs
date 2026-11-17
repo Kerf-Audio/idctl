@@ -226,15 +226,25 @@ pub fn restore_targets(found: &Found, iface: Option<&Interface>) -> Vec<(u32, u3
 fn restore_sync(found: &Found, vendor: u16, product: u16) -> Result<(), String> {
     let iface = interface(vendor, product)?;
     let targets = restore_targets(found, iface.as_ref());
+    // A node that will not take its old values must not keep the graph
+    // forced: the buffer size is always handed back, and the first error is
+    // reported afterwards.
+    let mut failed = None;
     for (node, period, headroom) in &targets {
-        set_alsa(*node, *period, *headroom)?;
+        if let Err(why) = set_alsa(*node, *period, *headroom) {
+            failed.get_or_insert(why);
+        }
     }
     // Same reason as in `apply_sync`; with no force to return to, the
     // values land when the stream next opens.
-    if !targets.is_empty() && found.force_quantum != 0 && forced_quantum()? == found.force_quantum {
-        force_quantum(nudge(found.force_quantum))?;
+    if !targets.is_empty()
+        && found.force_quantum != 0
+        && forced_quantum().is_ok_and(|q| q == found.force_quantum)
+    {
+        let _ = force_quantum(nudge(found.force_quantum));
     }
-    force_quantum(found.force_quantum)
+    let quantum = force_quantum(found.force_quantum);
+    failed.map_or(quantum, Err)
 }
 
 async fn blocking<T: Send + 'static>(

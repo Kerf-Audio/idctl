@@ -35,14 +35,23 @@ pub fn parse_header(line: &str) -> Option<Header> {
     if cols.first() != Some(&"S") || at("NAME").is_none() {
         return None;
     }
-    let errors = at("ERR")?;
-    Some(Header {
-        id: at("ID")?,
-        quantum: at("QUANT")?,
-        rate: at("RATE")?,
-        load: at("B/Q")?,
+    let (id, quantum, rate, load) = (at("ID")?, at("QUANT")?, at("RATE")?, at("B/Q")?);
+    let (errors, format, name) = (at("ERR")?, at("FORMAT")?, at("NAME")?);
+    // The real header starts `S ID QUANT RATE` and ends `ERR FORMAT NAME`.
+    // Anything else, such as a node name that mentions those words, is not
+    // one: its positions could point past the end of a row.
+    let in_order = (id, quantum, rate) == (1, 2, 3)
+        && rate < load
+        && load < errors
+        && errors < format
+        && format < name;
+    in_order.then_some(Header {
+        id,
+        quantum,
+        rate,
+        load,
         errors,
-        skip: at("FORMAT")?.checked_sub(errors + 1)?,
+        skip: format - errors - 1,
     })
 }
 
@@ -75,18 +84,22 @@ pub fn parse_row(header: &Header, line: &str) -> Option<Row> {
         return None;
     }
     Some(Row {
-        id: cols[header.id].parse().ok()?,
-        quantum: cols[header.quantum].parse().ok()?,
-        rate: cols[header.rate].parse().ok()?,
-        load: cols[header.load]
+        id: cols.get(header.id)?.parse().ok()?,
+        quantum: cols.get(header.quantum)?.parse().ok()?,
+        rate: cols.get(header.rate)?.parse().ok()?,
+        load: cols
+            .get(header.load)?
             .parse::<f32>()
             .ok()
             .filter(|v| v.is_finite()),
-        errors: cols[header.errors].parse().ok()?,
+        errors: cols.get(header.errors)?.parse().ok()?,
         follower,
         name: rest.join(" "),
     })
 }
+
+/// Rows kept from one iteration; a graph has tens of nodes, so more is noise.
+const MAX_ROWS: usize = 4096;
 
 /// Groups lines into iterations.
 #[derive(Default)]
@@ -108,7 +121,9 @@ impl Frames {
             return done;
         }
         let row = parse_row(self.header.as_ref()?, line)?;
-        self.rows.push(row);
+        if self.rows.len() < MAX_ROWS {
+            self.rows.push(row);
+        }
         None
     }
 }
@@ -219,5 +234,39 @@ mod tests {
         let done: Vec<Vec<Row>> = IDLE.lines().filter_map(|l| frames.push(l)).collect();
         assert_eq!(done.len(), 2);
         assert!(done[1].iter().any(|r| r.name.contains("iD2")));
+    }
+
+    #[test]
+    fn a_header_out_of_order_is_refused() {
+        assert!(
+            parse_header("S ERR FORMAT NAME a b c d e f g h i j k ID QUANT RATE B/Q").is_none()
+        );
+        assert!(parse_header("S QUANT ID RATE WAIT BUSY W/Q B/Q ERR FORMAT NAME").is_none());
+    }
+
+    #[test]
+    fn a_node_row_is_never_a_header() {
+        let forged = "S   44      0      0    ---     ---   ---   ---     0   ID QUANT RATE B/Q ERR FORMAT NAME";
+        assert!(parse_header(forged).is_none());
+    }
+
+    #[test]
+    fn a_row_shorter_than_its_header_is_skipped() {
+        let wide = parse_header("S ID QUANT RATE WAIT BUSY W/Q B/Q ERR FORMAT NAME").unwrap();
+        for line in ["R 44", "R 44 64 48000 1us", "R 44 64 48000 1us 2us 0.1 0.2"] {
+            assert!(parse_row(&wide, line).is_none(), "{line}");
+        }
+    }
+
+    #[test]
+    fn one_iteration_keeps_a_bounded_number_of_rows() {
+        let mut frames = Frames::default();
+        frames.push(HEADER);
+        for id in 0..10_000 {
+            frames.push(&format!(
+                "R {id} 64 48000 1.0us 1.0us 0.01 0.01 0 F32LE 2 48000 = node{id}"
+            ));
+        }
+        assert_eq!(frames.push(HEADER).unwrap().len(), 4096);
     }
 }

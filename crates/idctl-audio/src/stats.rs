@@ -6,6 +6,10 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::top::Row;
 
+/// Applications listed at once; a process that keeps renaming its stream
+/// cannot grow the list without limit.
+const MAX_APPS: usize = 64;
+
 /// Seconds of xrun history kept for the strip.
 pub const HISTORY_SECS: usize = 300;
 
@@ -148,13 +152,15 @@ impl Monitor {
                     driving = Driving::Other(driver.name.clone());
                 }
             } else if ours && row.follower {
-                let app = match self.apps.iter().position(|a| a.name == row.name) {
-                    Some(i) => &mut self.apps[i],
-                    None => {
+                let index = match self.apps.iter().position(|a| a.name == row.name) {
+                    Some(i) => i,
+                    None if self.apps.len() < MAX_APPS => {
                         self.apps.push(Party::new(&row.name));
-                        self.apps.last_mut().expect("just pushed")
+                        self.apps.len() - 1
                     }
+                    None => continue,
                 };
+                let app = &mut self.apps[index];
                 app.listener = self.listeners.contains(&row.name);
                 app.add(new, at);
                 app.set_load(load);
@@ -397,5 +403,20 @@ mod tests {
         assert_eq!(meter.xruns, 40);
         assert!(!s.apps.iter().find(|a| a.name == "My DAW").unwrap().listener);
         assert_eq!(m.history().last(), Some(0));
+    }
+
+    #[test]
+    fn the_list_of_apps_is_bounded() {
+        let mut m = monitor();
+        let crowd = |errors: u64| {
+            let mut v = vec![row(44, OUT, false, 0, 0.1)];
+            for i in 0..200 {
+                v.push(row(1000 + i, &format!("app{i}"), true, errors, 0.1));
+            }
+            v
+        };
+        m.frame(&crowd(0), 100);
+        let s = m.frame(&crowd(3), 101);
+        assert_eq!(s.apps.len(), 64);
     }
 }

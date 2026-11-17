@@ -186,7 +186,9 @@ impl Sweep {
         else {
             return Action::Wait;
         };
-        let (interface_xruns, app_xruns) = (last.0 - base.0, last.1 - base.1);
+        // Counts restart from zero if the page's counters are reset mid-run.
+        let (interface_xruns, app_xruns) =
+            (last.0.saturating_sub(base.0), last.1.saturating_sub(base.1));
         let clean = interface_xruns == 0 && app_xruns == 0;
         self.steps.push(Step {
             tuning: self.tunings[self.at],
@@ -488,5 +490,21 @@ mod tests {
         assert_eq!(suggest(&steps), Some(1));
         assert_eq!(suggest(&[step(256, true, 0.1)]), None);
         assert_eq!(suggest(&[]), None);
+    }
+
+    #[test]
+    fn counts_that_go_backwards_do_not_wrap() {
+        let mut s = sweep(&[256]);
+        s.start();
+        // The counts were reset in the middle of the hold.
+        run_step(&mut s, |sec| {
+            if sec < SETTLE_SECS + 1 {
+                (7, 7, 0.1)
+            } else {
+                (0, 0, 0.1)
+            }
+        });
+        let step = &s.steps()[0];
+        assert_eq!((step.interface_xruns, step.app_xruns), (0, 0));
     }
 }

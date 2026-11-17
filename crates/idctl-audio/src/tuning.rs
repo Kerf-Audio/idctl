@@ -106,7 +106,7 @@ pub fn encode(found: &Found) -> String {
 pub fn decode(text: &str) -> Option<Found> {
     let mut lines = text.lines();
     let force_quantum = lines.next()?.strip_prefix("quantum=")?.parse().ok()?;
-    let nodes = lines
+    let nodes: Vec<(String, u32, u32)> = lines
         .map(|line| {
             let mut parts = line.strip_prefix("node=")?.splitn(3, ',');
             let period = parts.next()?.parse().ok()?;
@@ -114,7 +114,15 @@ pub fn decode(text: &str) -> Option<Found> {
             Some((parts.next()?.to_owned(), period, headroom))
         })
         .collect::<Option<_>>()?;
-    Some(Found {
+    // The record is a file another process could have written: refuse what
+    // the page would never set. A force of 0 means none, and any size inside
+    // the range is kept, since the user's own setting need not be a power of
+    // two.
+    let sane = (force_quantum == 0 || (QUANTUM.0..=QUANTUM.1).contains(&force_quantum))
+        && nodes
+            .iter()
+            .all(|(_, period, headroom)| *period <= PERIOD.1 && *headroom <= HEADROOM_MAX);
+    sane.then_some(Found {
         force_quantum,
         nodes,
     })
@@ -214,5 +222,19 @@ mod tests {
         ] {
             assert_eq!(decode(junk), None, "{junk:?}");
         }
+    }
+
+    #[test]
+    fn decode_refuses_values_the_page_would_never_set() {
+        for text in [
+            "quantum=1\n",
+            "quantum=4294967295\n",
+            "quantum=64\nnode=9999,32,n\n",
+            "quantum=64\nnode=32,99999,n\n",
+        ] {
+            assert_eq!(decode(text), None, "{text:?}");
+        }
+        assert!(decode("quantum=0\n").is_some());
+        assert!(decode("quantum=100\nnode=0,0,n\n").is_some());
     }
 }
